@@ -16,10 +16,9 @@ class Robot
 {
 public:
     Robot();
-    ~Robot(){};
+    ~Robot() {};
 
-// GET/SET
-#pragma region
+#pragma region get/set
     int getId() const;
     void setId(int _id);
 
@@ -35,6 +34,7 @@ public:
 
     RobotStatus getStatus() const;
     void setStatus(RobotStatus _status);
+
     float getSpeed() const;
     void setSpeed(int _speed);
 
@@ -43,8 +43,8 @@ public:
 
     QString getIp() const;
     void setIp(QString _ip);
-#pragma endregion
 
+#pragma endregion
 
 private:
     int r_id;             // 机器人ID
