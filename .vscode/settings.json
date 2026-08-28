@@ -1,0 +1,40 @@
+{
+    "C_Cpp.default.includePath": [
+        "/usr/include/qt",
+        "/usr/include/qt/QtCore",
+        "/usr/include/qt/QtGui",
+        "/usr/include/qt/QtWidgets",
+        "/usr/include/qt/QtNetwork",
+        "/usr/include/qt/QtSql",
+        "${workspaceFolder}/**"
+    ],
+    "C_Cpp.default.defines": [
+        "QT_CORE_LIB",
+        "QT_GUI_LIB",
+        "QT_WIDGETS_LIB"
+    ],
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.errorSquiggles": "enabled",
+    "files.exclude": {
+        "**/*.o": true,
+        "**/*.moc": true,
+        "**/moc_*": true,
+        "**/ui_*.h": true,
+        "**/Makefile": true,
+        "**/.qmake.stash": true,
+        "**/*.pro.user": true,
+        "**/*.pro.user.*": true,
+        "**/.git": true,
+        "**/.vscode": true
+    },
+    "search.exclude": {
+        "**/*.o": true,
+        "**/*.moc": true,
+        "**/moc_*": true,
+        "**/ui_*.h": true,
+        "**/Makefile": true
+    }
+}
