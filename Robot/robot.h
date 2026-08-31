@@ -2,14 +2,18 @@
 #define ROBOT_H
 
 #include <QString>
+#include <QDateTime>
 
 // 0-空闲；1-执行任务；2-故障；3-离线
 enum class RobotStatus
 {
+    None = -1,
     Idle = 0,
     Busy = 1,
     Error = 2,
-    Offline = 3
+    Offline = 3,
+    Charging = 4
+
 };
 
 class Robot
@@ -36,7 +40,7 @@ public:
     void setStatus(RobotStatus _status);
 
     float getSpeed() const;
-    void setSpeed(int _speed);
+    void setSpeed(float _speed);
 
     int getTask() const;
     void setTask(int _tId);
@@ -44,7 +48,12 @@ public:
     QString getIp() const;
     void setIp(QString _ip);
 
+    void updateStatus(float _x, float _y, int _battery, float _speed, RobotStatus _status);
 #pragma endregion
+
+    bool isAvailable();
+    QString printRobot();
+    QString getErrorMsg();
 
 private:
     int r_id;             // 机器人ID
@@ -53,7 +62,9 @@ private:
     RobotStatus r_status; // 0-空闲；1-执行任务；2-故障；3-离线
     float r_curspeed;     // 当前速度
     int r_curTaskId;      // 执行的任务id -1为无任务
-    QString r_ip;         // 网络地址
+    QString r_errorMsg;
+    QString r_ip;          // 网络地址
+    QDateTime r_creatTime; // 创建时间
 };
 
 #endif

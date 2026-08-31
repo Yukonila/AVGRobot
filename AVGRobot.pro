@@ -8,12 +8,14 @@ INCLUDEPATH += $$PWD/Tcp
 
 SOURCES += \
     Robot/robot.cpp \
+    Robot/robotManager.cpp \
     Tcp/robotTcpManager.cpp \
     main.cpp \
     mainwindow.cpp
 
 HEADERS += \
     Robot/robot.h \
+    Robot/robotManager.h \
     Tcp/robotTcpManager.h \
     mainwindow.h
 
