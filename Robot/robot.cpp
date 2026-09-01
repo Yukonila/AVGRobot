@@ -118,20 +118,6 @@ void Robot::setIp(QString _ip)
     r_ip = _ip;
 }
 
-void Robot::updateStatus(float _x, float _y, int _battery, float _speed, RobotStatus _status)
-{
-    // 输入-1表示不更新.
-
-    setPx(_x);
-    setPy(_y);
-    setBattery(_battery);
-    setSpeed(_speed);
-    if (_status != RobotStatus::None)
-    {
-        r_status = _status;
-    }
-}
-
 #pragma endregion
 
 // 是否空闲

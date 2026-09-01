@@ -12,7 +12,8 @@ enum class RobotStatus
     Busy = 1,
     Error = 2,
     Offline = 3,
-    Charging = 4
+    Lowbattery = 4,
+    Charging = 5
 
 };
 
@@ -48,7 +49,6 @@ public:
     QString getIp() const;
     void setIp(QString _ip);
 
-    void updateStatus(float _x, float _y, int _battery, float _speed, RobotStatus _status);
 #pragma endregion
 
     bool isAvailable();
