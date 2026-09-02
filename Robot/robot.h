@@ -48,6 +48,7 @@ public:
 
     QString getIp() const;
     void setIp(QString _ip);
+    void setAll(int id, float x, float y, int battery, float speed, int taskid, RobotStatus status, QString ip);
 
 #pragma endregion
 
@@ -64,6 +65,7 @@ private:
     int r_curTaskId;      // 执行的任务id -1为无任务
     QString r_errorMsg;
     QString r_ip;          // 网络地址
+    int r_port;            // 端口
     QDateTime r_creatTime; // 创建时间
 };
 

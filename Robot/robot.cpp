@@ -1,8 +1,7 @@
 #include "robot.h"
 
 Robot::Robot()
-    : r_id(0), r_x(0.0f), r_y(0.0f), r_battery(100), r_creatTime(QDateTime::currentDateTime()),
-      r_status(RobotStatus::Idle), r_curspeed(0.0f), r_ip(""), r_curTaskId(-1), r_errorMsg("")
+    : r_id(0), r_x(0.0f), r_y(0.0f), r_battery(100), r_status(RobotStatus::Idle), r_curspeed(0.0f), r_curTaskId(-1), r_errorMsg(""), r_port(0), r_ip(""), r_creatTime(QDateTime::currentDateTime())
 {
 }
 
@@ -116,6 +115,18 @@ QString Robot::getIp() const
 void Robot::setIp(QString _ip)
 {
     r_ip = _ip;
+}
+
+void Robot::setAll(int id, float x, float y, int battery, float speed, int taskid, RobotStatus status, QString ip)
+{
+    setId(id);
+    setPx(x);
+    setPy(y);
+    setBattery(battery);
+    setSpeed(speed);
+    setStatus(status);
+    setTask(taskid);
+    setIp(ip);
 }
 
 #pragma endregion

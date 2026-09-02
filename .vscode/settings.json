@@ -6,12 +6,14 @@
         "/usr/include/qt/QtWidgets",
         "/usr/include/qt/QtNetwork",
         "/usr/include/qt/QtSql",
-        "${workspaceFolder}/**"
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/build/vscode"
     ],
     "C_Cpp.default.defines": [
         "QT_CORE_LIB",
         "QT_GUI_LIB",
-        "QT_WIDGETS_LIB"
+        "QT_WIDGETS_LIB",
+        "QT_NETWORK_LIB"
     ],
     "C_Cpp.default.compilerPath": "/usr/bin/g++",
     "C_Cpp.default.cStandard": "c17",
@@ -22,7 +24,6 @@
         "**/*.o": true,
         "**/*.moc": true,
         "**/moc_*": true,
-        "**/ui_*.h": true,
         "**/Makefile": true,
         "**/.qmake.stash": true,
         "**/*.pro.user": true,
@@ -34,7 +35,6 @@
         "**/*.o": true,
         "**/*.moc": true,
         "**/moc_*": true,
-        "**/ui_*.h": true,
         "**/Makefile": true
     }
 }

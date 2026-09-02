@@ -46,17 +46,14 @@ bool RobotManager::addRobot(int id, const QString &ip)
         emit logMessage("[RobotManager] 不可用的RobotId: " + QString::number(id), 2);
         return false;
     }
+    if (!isValidIp(ip))
+    {
+        emit logMessage("[RobotManager] 不可用的RobotIP: " + ip, 2);
+        return false;
+    }
 
     Robot robot;
-    robot.setId(id);
-    robot.setIp(ip);
-    robot.setStatus(RobotStatus::Idle);
-    robot.setBattery(100);
-    robot.setPx(0.0f);
-    robot.setPy(0.0f);
-    robot.setSpeed(0.0f);
-    robot.setTask(-1);
-
+    robot.setAll(id, 0.0f, 0.0f, 100, 0.0f, -1, RobotStatus::Idle, ip);
     return addRobot(robot);
 }
 
@@ -154,6 +151,17 @@ bool RobotManager::hasRobot(int id) const
 {
     QMutexLocker locker(&m_mutex);
     return m_robot.contains(id);
+}
+
+bool RobotManager::isValidIp(const QString &ipAddress)
+{
+    if (ipAddress.isEmpty())
+    {
+        return false;
+    }
+
+    QHostAddress address;
+    return address.setAddress(ipAddress);
 }
 
 int RobotManager::getRobotCount() const

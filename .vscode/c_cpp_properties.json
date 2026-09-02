@@ -3,16 +3,21 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/build/vscode",
+                "${workspaceFolder}",
+                "${workspaceFolder}/Robot",
+                "${workspaceFolder}/Tcp",
                 "/usr/include/qt",
                 "/usr/include/qt/QtCore",
                 "/usr/include/qt/QtGui",
-                "/usr/include/qt/QtWidgets"
+                "/usr/include/qt/QtWidgets",
+                "/usr/include/qt/QtNetwork"
             ],
             "defines": [
                 "QT_CORE_LIB",
                 "QT_GUI_LIB",
-                "QT_WIDGETS_LIB"
+                "QT_WIDGETS_LIB",
+                "QT_NETWORK_LIB"
             ],
             "compilerPath": "/usr/bin/g++",
             "cStandard": "c17",

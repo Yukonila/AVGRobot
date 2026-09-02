@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include "Robot/robotManager.h"
 #include "robotTcpManager.h"
 
 QT_BEGIN_NAMESPACE
@@ -19,7 +20,12 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
+    void testfun();
+    void appendLog(const QString &msg, int level);
+    QString statusToString(RobotStatus status);
+
 private:
     Ui::MainWindow *ui;
+    RobotManager *m_robotmanager;
 };
 #endif // MAINWINDOW_H

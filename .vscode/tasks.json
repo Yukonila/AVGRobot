@@ -6,19 +6,21 @@
             "type": "shell",
             "command": "qmake",
             "args": [
-                "AVGReboot.pro"
+                "../../AVGRobot.pro"
             ],
             "group": "build",
             "problemMatcher": [],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}/build/vscode"
             }
         },
         {
             "label": "make",
             "type": "shell",
             "command": "make",
-            "args": [],
+            "args": [
+                "-j4"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -30,7 +32,7 @@
                 "$gcc"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}/build/vscode"
             }
         },
         {
@@ -42,19 +44,19 @@
             ],
             "group": "build",
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}/build/vscode"
             }
         },
         {
             "label": "Run",
             "type": "shell",
-            "command": "./AVGReboot",
+            "command": "./AVGRobot",
             "group": "test",
             "dependsOn": [
                 "make"
             ],
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${workspaceFolder}/build/vscode"
             }
         }
     ]

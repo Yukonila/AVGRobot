@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug AVGReboot",
+            "name": "Debug AVGRobot",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/AVGReboot",
+            "program": "${workspaceFolder}/build/vscode/AVGRobot",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/build/vscode",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

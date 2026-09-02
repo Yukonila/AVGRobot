@@ -6,6 +6,7 @@
 #include <QList>
 #include <QMutex>
 #include <QDebug>
+#include <QHostAddress>
 #include "robot.h"
 
 class RobotManager : public QObject
@@ -26,6 +27,7 @@ public:
     Robot *getRobot(int id);
     const Robot *getRobot(int id) const;
     bool hasRobot(int id) const;
+    bool isValidIp(const QString &ipAddress);
     int getRobotCount() const;
 
     QList<int> getAllRobotIds() const;
