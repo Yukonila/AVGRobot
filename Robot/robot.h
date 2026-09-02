@@ -52,8 +52,8 @@ public:
 #pragma endregion
 
     bool isAvailable();
-    QString printRobot();
-    QString getErrorMsg();
+    QString printRobot() const;
+    QString getErrorMsg() const;
 
 private:
     int r_id;             // 机器人ID

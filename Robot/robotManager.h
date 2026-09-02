@@ -36,11 +36,10 @@ public:
     bool updateRobotPosition(int id, float x, float y);
     bool updateRobotBattery(int id, int battery);
     bool updateRobotSpeed(int id, float speed);
-    bool updateRobotStatusEnum(int id, RobotStatus status);
+    bool updateRobotStatus(int id, RobotStatus status);
     bool updateRobotTask(int id, int taskId);
     bool updateRobotIp(int id, const QString &ip);
 
-    // 批量更新（调用上面的独立方法）
     bool updateRobotStatus(int id, float x, float y, int battery,
                            float speed, RobotStatus status);
 

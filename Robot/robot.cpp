@@ -126,7 +126,7 @@ bool Robot::isAvailable()
     return r_status == RobotStatus::Idle;
 }
 // 打印信息
-QString Robot::printRobot()
+QString Robot::printRobot() const
 {
     QString msg;
     msg += "机器人信息：\n";
@@ -141,7 +141,7 @@ QString Robot::printRobot()
     return msg;
 }
 
-QString Robot::getErrorMsg()
+QString Robot::getErrorMsg() const
 {
     return r_errorMsg;
 }
