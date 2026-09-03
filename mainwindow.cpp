@@ -76,8 +76,8 @@ void MainWindow::createMenuBar()
     QMenu *helpMenu = menuBar->addMenu("帮助(&H)");
     QAction *aboutAction = helpMenu->addAction("关于(&A)");
     connect(aboutAction, &QAction::triggered, this, [this]()
-            { QMessageBox::about(this, "关于 AVG 调度系统",
-                                 "AVG 物流机器人任务调度系统\n\n"
+            { QMessageBox::about(this, "关于本系统",
+                                 "AVG 物流机器人任务调度系统 (RCS)\n\n"
                                  "版本: 1.0.0\n"
                                  "开发框架: Qt 5.12\n"
                                  "© 2026 All Rights Reserved"); });

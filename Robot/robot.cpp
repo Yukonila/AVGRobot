@@ -5,8 +5,6 @@ Robot::Robot()
 {
 }
 
-#pragma region get/set
-
 int Robot::getId() const
 {
     return r_id;
@@ -133,8 +131,6 @@ void Robot::setAll(int id, float x, float y, int battery, float speed, int taski
     setTask(taskid);
     setIp(ip);
 }
-
-#pragma endregion
 
 // 是否空闲
 bool Robot::isAvailable()

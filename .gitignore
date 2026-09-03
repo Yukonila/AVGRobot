@@ -27,6 +27,7 @@ Makefile*
 *.prl
 *.app
 moc_*.cpp
+moc_predefs.h
 ui_*.h
 qrc_*.cpp
 Thumbs.db
@@ -73,6 +74,8 @@ CMakeLists.txt.user*
 # --------
 *.dll
 *.exe
+# Qt 工程可执行文件（在源码目录内直接构建时生成；shadow build 在 /build* 下，已被忽略）
+/AVGRobot
 
 # Directories with generated files
 .moc/

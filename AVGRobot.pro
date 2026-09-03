@@ -12,6 +12,7 @@ SOURCES += \
     Robot/robot.cpp \
     Robot/robotManager.cpp \
     Robot/robotcontroller.cpp \
+    Task/task.cpp \
     Tcp/robotTcpManager.cpp \
     loginwindow.cpp \
     main.cpp \
@@ -22,6 +23,7 @@ HEADERS += \
     Robot/robot.h \
     Robot/robotManager.h \
     Robot/robotcontroller.h \
+    Task/task.h \
     Tcp/robotTcpManager.h \
     loginwindow.h \
     mainwindow.h

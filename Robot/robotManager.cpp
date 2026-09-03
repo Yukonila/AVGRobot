@@ -446,7 +446,9 @@ QList<int> RobotManager::getLowBatteryRobots(int threshold) const
     return result;
 }
 
-// 按照负载排序
+// 按照负载排序 —— 与项目文档 6.1「最小负载优先 LLF」一致：
+// 负载(当前排队任务数)小的排在前面；负载相同按 ID 升序，保证结果确定。
+// 注：文档 LLF+SDF 中的"距离优先"需任务起点/终点参与，等任务模块就绪后在此扩展。
 QList<int> RobotManager::getRobotsSortedByLoad() const
 {
     QMutexLocker locker(&m_mutex);
@@ -454,9 +456,14 @@ QList<int> RobotManager::getRobotsSortedByLoad() const
     QList<int> ids = m_robot.keys();
 
     std::sort(ids.begin(), ids.end(), [this](int a, int b)
-              { bool busyA = (m_robot[a].getTask() != -1);
-                bool busyB = (m_robot[b].getTask() != -1);
-                return busyA > busyB ; });
+              {
+        // 单任务模型下：有任务=负载1，无任务=负载0
+        int loadA = (m_robot[a].getTask() != -1) ? 1 : 0;
+        int loadB = (m_robot[b].getTask() != -1) ? 1 : 0;
+        if (loadA != loadB)
+            return loadA < loadB;   // 最小负载优先
+        return a < b;               // 负载相同按 ID 升序
+    });
 
     return ids;
 }

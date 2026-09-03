@@ -15,7 +15,7 @@ static const char *kDefaultPass = "123";
 LoginWindow::LoginWindow(QWidget *parent)
     : QDialog(parent), m_userEdit(nullptr), m_passEdit(nullptr), m_btnLogin(nullptr), m_btnCancel(nullptr), m_mainWindow(nullptr)
 {
-    setWindowTitle("登录 - AVG 机器人调度系统");
+    setWindowTitle("登录 - AVG 物流机器人任务调度系统");
     setMinimumWidth(340);
 
     auto *userLabel = new QLabel("用户名:", this);
