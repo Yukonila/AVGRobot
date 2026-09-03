@@ -54,7 +54,7 @@ bool RobotManager::addRobot(int id, const QString &ip)
 
     Robot robot;
     robot.setAll(id, 0.0f, 0.0f, 100, 0.0f, -1, RobotStatus::Idle, ip);
-    
+
     return addRobot(robot);
 }
 
@@ -691,19 +691,38 @@ QString RobotManager::printAllRobots() const
         return "=== 没有机器人 ===";
     }
 
-    QString result;
-    result += "=== 机器人列表 (总数: " + QString::number(m_robot.size()) + ") ===\n";
-    result += "空闲: " + QString::number(getIdleCount()) + " | ";
-    result += "忙碌: " + QString::number(getBusyCount()) + " | ";
-    result += "故障: " + QString::number(getFaultCount()) + " | ";
-    result += "在线: " + QString::number(getOnlineCount()) + "\n";
-    result += "低电量(<" + QString::number(m_lowBatteryThreshold) + "%): " + QString::number(getLowBatteryCount()) + "\n\n";
+    int idle = 0, busy = 0, fault = 0, online = 0, lowBattery = 0;
 
+    QString body;
     for (auto it = m_robot.begin(); it != m_robot.end(); ++it)
     {
-        result += it.value().printRobot() + "\n";
+        const Robot &r = it.value();
+        RobotStatus st = r.getStatus();
+
+        if (st == RobotStatus::Idle)
+            idle++;
+        else if (st == RobotStatus::Busy)
+            busy++;
+        else if (st == RobotStatus::Error)
+            fault++;
+        if (st != RobotStatus::Offline && st != RobotStatus::None)
+            online++;
+        if (r.getBattery() < m_lowBatteryThreshold && r.getBattery() >= 0)
+            lowBattery++;
+
+        body += r.printRobot() + "\n";
     }
 
+    QString result;
+    result += "=== 机器人列表 (总数: " + QString::number(m_robot.size()) + ") ===\n";
+    result += "空闲: " + QString::number(idle) + " | ";
+    result += "忙碌: " + QString::number(busy) + " | ";
+    result += "故障: " + QString::number(fault) + " | ";
+    result += "在线: " + QString::number(online) + "\n";
+    result += "低电量(<" + QString::number(m_lowBatteryThreshold) + "%): " +
+              QString::number(lowBattery) + "\n\n";
+    result += body;
+    result += "\n";
     return result;
 }
 
