@@ -1,7 +1,7 @@
 #include "robot.h"
 
 Robot::Robot()
-    : r_id(0), r_x(0.0f), r_y(0.0f), r_battery(100), r_status(RobotStatus::Idle), r_curspeed(0.0f), r_curTaskId(-1), r_errorMsg(""), r_port(0), r_ip(""), r_creatTime(QDateTime::currentDateTime())
+    : r_id(0), r_x(0.0f), r_y(0.0f), r_battery(100), r_status(RobotStatus::Idle), r_curspeed(0.0f), r_curTaskId(-1), r_errorMsg(""), r_ip(""), r_creatTime(QDateTime::currentDateTime())
 {
 }
 
@@ -114,6 +114,11 @@ QString Robot::getIp() const
 
 void Robot::setIp(QString _ip)
 {
+    if (!isValidIp(_ip))
+    {
+        r_errorMsg = "不可用的IP地址";
+        return;
+    }
     r_ip = _ip;
 }
 
@@ -155,4 +160,15 @@ QString Robot::printRobot() const
 QString Robot::getErrorMsg() const
 {
     return r_errorMsg;
+}
+// 是否合理
+bool Robot::isValidIp(const QString &ipAddress)
+{
+    if (ipAddress.isEmpty())
+    {
+        return false;
+    }
+
+    QHostAddress address;
+    return address.setAddress(ipAddress);
 }

@@ -79,6 +79,8 @@ QString MainWindow::statusToString(RobotStatus status)
 
 void MainWindow::testfun()
 {
-    m_robotmanager->addRobot(1001, "192.181.100.58");
-    
+    for (int i = 0; i < 10; i++)
+    {
+        m_robotmanager->addRobot(1000 + i, "192.181.100.58");
+    }
 }

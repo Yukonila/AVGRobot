@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <QDateTime>
+#include <QHostAddress>
 
 // 0-空闲；1-执行任务；2-故障；3-离线
 enum class RobotStatus
@@ -55,6 +56,7 @@ public:
     bool isAvailable();
     QString printRobot() const;
     QString getErrorMsg() const;
+    static bool isValidIp(const QString &ipAddress);
 
 private:
     int r_id;             // 机器人ID
@@ -65,7 +67,6 @@ private:
     int r_curTaskId;      // 执行的任务id -1为无任务
     QString r_errorMsg;
     QString r_ip;          // 网络地址
-    int r_port;            // 端口
     QDateTime r_creatTime; // 创建时间
 };
 
