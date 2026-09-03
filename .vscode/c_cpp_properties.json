@@ -7,6 +7,7 @@
                 "${workspaceFolder}",
                 "${workspaceFolder}/Robot",
                 "${workspaceFolder}/Tcp",
+                "${workspaceFolder}/Dialog",
                 "/usr/include/qt",
                 "/usr/include/qt/QtCore",
                 "/usr/include/qt/QtGui",
