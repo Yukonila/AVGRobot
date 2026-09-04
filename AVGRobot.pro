@@ -10,10 +10,10 @@ INCLUDEPATH += $$PWD/Dialog
 SOURCES += \
     Dialog/robotdialog.cpp \
     Robot/robot.cpp \
-    Robot/robotManager.cpp \
     Robot/robotcontroller.cpp \
+    Robot/robotmanager.cpp \
     Task/task.cpp \
-    Tcp/robotTcpManager.cpp \
+    Task/taskmanager.cpp \
     loginwindow.cpp \
     main.cpp \
     mainwindow.cpp
@@ -21,10 +21,10 @@ SOURCES += \
 HEADERS += \
     Dialog/robotdialog.h \
     Robot/robot.h \
-    Robot/robotManager.h \
     Robot/robotcontroller.h \
+    Robot/robotmanager.h \
     Task/task.h \
-    Tcp/robotTcpManager.h \
+    Task/taskmanager.h \
     loginwindow.h \
     mainwindow.h
 

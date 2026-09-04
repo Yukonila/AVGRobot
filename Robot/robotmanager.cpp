@@ -1,4 +1,4 @@
-#include "robotManager.h"
+#include "robotmanager.h"
 
 RobotManager::RobotManager(QObject *parent)
     : QObject(parent), m_lowBatteryThreshold(20)

@@ -2,7 +2,7 @@
 #define ROBOTCONTROLLER_H
 
 #include <QObject>
-#include "robotManager.h"
+#include "robotmanager.h"
 
 class RobotController : public QObject
 {
