@@ -59,12 +59,14 @@ private:
     int getSelectedRobotId() const;
     int getSelectedTaskId() const;
     int getNextRobotId();
+    int getNextTaskId();
     void createMenuBar();
 
     Ui::MainWindow *ui;
     RobotController *m_controller;
     RobotMapWidget *m_map;
     int m_nextRobotId = 10001;   // 新建机器人ID从10001开始自增
+    int m_nextTaskId = 1;        // 新建任务ID从1开始自增
 };
 
 #endif // MAINWINDOW_H

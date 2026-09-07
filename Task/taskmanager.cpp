@@ -536,19 +536,22 @@ void TaskManager::removeFromPendingList(int taskId)
 
 void TaskManager::reorderPendingList()
 {
+    // 注意：本函数只在已持有 m_mutex 时被调用(addToPendingList)，
+    //       因此排序比较器必须直接读 m_allTasks，不能再调用会加锁的 getTask()，
+    //       否则非递归 QMutex 同线程二次加锁会自死锁。
     std::sort(m_pendingList.begin(), m_pendingList.end(),
               [this](int a, int b)
               {
-                  const Task *ta = getTask(a);
-                  const Task *tb = getTask(b);
-                  if (!ta || !tb)
-                      return false;
+                  auto ita = m_allTasks.find(a);
+                  auto itb = m_allTasks.find(b);
+                  if (ita == m_allTasks.end() || itb == m_allTasks.end())
+                      return a < b;
 
-                  if (ta->getPriority() != tb->getPriority())
+                  if (ita->getPriority() != itb->getPriority())
                   {
-                      return ta->getPriority() > tb->getPriority();
+                      return ita->getPriority() > itb->getPriority(); // 高优先级在前
                   }
-                  return ta->getCreateTime() < tb->getCreateTime();
+                  return ita->getCreateTime() < itb->getCreateTime(); // 早创建在前
               });
 }
 
@@ -621,7 +624,29 @@ QString TaskManager::printTasksByStatus(TaskStatus status) const
 {
     QMutexLocker locker(&m_mutex);
 
-    QList<int> ids = getTaskIdsByStatus(status);
+    // 直接读私有状态表（勿调用会加锁的 getTaskIdsByStatus，避免同线程二次加锁自死锁）
+    QList<int> ids;
+    switch (status)
+    {
+    case TaskStatus::Pending:
+        ids = m_pendingList;
+        break;
+    case TaskStatus::Executing:
+        ids = m_executingMap.keys();
+        break;
+    case TaskStatus::Completed:
+        ids = m_completedList;
+        break;
+    case TaskStatus::Failed:
+        ids = m_failedList;
+        break;
+    case TaskStatus::Cancelled:
+        ids = m_cancelledList;
+        break;
+    default:
+        break;
+    }
+
     if (ids.isEmpty())
     {
         return "没有 " + QString::fromUtf8(Task().getStatusString().toUtf8()) + " 状态的任务";

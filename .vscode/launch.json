@@ -19,7 +19,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "make"
+            "preLaunchTask": "build"
         }
     ]
 }

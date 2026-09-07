@@ -292,6 +292,7 @@ void RobotController::stepRobots()
 
 bool RobotController::saveData(const QString &filePath)
 {
+    Q_UNUSED(filePath); // 使用 DataManager 默认路径
     DataManager dm(this);
     connect(&dm, &DataManager::logMessage, this, &RobotController::logMessage);
 
@@ -312,6 +313,7 @@ bool RobotController::saveData(const QString &filePath)
 
 bool RobotController::loadData(const QString &filePath)
 {
+    Q_UNUSED(filePath); // 使用 DataManager 默认路径
     DataManager dm(this);
     connect(&dm, &DataManager::logMessage, this, &RobotController::logMessage);
 

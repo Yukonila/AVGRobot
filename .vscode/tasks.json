@@ -2,7 +2,26 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "qmake",
+            "label": "build",
+            "type": "shell",
+            "command": "if [ -f build/vscode/Makefile ] && [ AVGRobot.pro -ot build/vscode/Makefile ]; then cd build/vscode && make -j4; else mkdir -p build/vscode && cd build/vscode && qmake ../../AVGRobot.pro && make -j4; fi",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "qmake (强制重新生成 Makefile)",
             "type": "shell",
             "command": "mkdir -p build/vscode && cd build/vscode && qmake ../../AVGRobot.pro",
             "group": "build",
@@ -12,28 +31,7 @@
             }
         },
         {
-            "label": "make",
-            "type": "shell",
-            "command": "make",
-            "args": [
-                "-j4"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "dependsOn": [
-                "qmake"
-            ],
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}/build/vscode"
-            }
-        },
-        {
-            "label": "Clean",
+            "label": "clean",
             "type": "shell",
             "command": "mkdir -p build/vscode && cd build/vscode && make clean",
             "group": "build",
@@ -42,13 +40,21 @@
             }
         },
         {
-            "label": "Run",
+            "label": "run",
             "type": "shell",
             "command": "./AVGRobot",
-            "group": "test",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
             "dependsOn": [
-                "make"
+                "build"
             ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
             "options": {
                 "cwd": "${workspaceFolder}/build/vscode"
             }

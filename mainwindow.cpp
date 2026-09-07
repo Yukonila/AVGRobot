@@ -277,7 +277,7 @@ void MainWindow::onBtnAddTaskClicked()
 
     auto *idSpin = new QSpinBox(&dlg);
     idSpin->setRange(0, 999999);
-    idSpin->setValue(1);
+    idSpin->setValue(getNextTaskId());   // 任务ID从1开始自增
 
     auto *prioCombo = new QComboBox(&dlg);
     prioCombo->addItem("低", 0);
@@ -481,6 +481,17 @@ int MainWindow::getNextRobotId()
         ++id;
 
     m_nextRobotId = id + 1;
+    return id;
+}
+
+int MainWindow::getNextTaskId()
+{
+    // 任务ID从1开始自增，自动跳过已存在的ID
+    int id = m_nextTaskId;
+    QList<int> existing = m_controller->getAllTaskIds();
+    while (existing.contains(id))
+        ++id;
+    m_nextTaskId = id + 1;
     return id;
 }
 
