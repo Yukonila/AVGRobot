@@ -6,27 +6,35 @@ CONFIG += c++17
 INCLUDEPATH += $$PWD/Robot
 INCLUDEPATH += $$PWD/Tcp
 INCLUDEPATH += $$PWD/Dialog
+INCLUDEPATH += $$PWD/Task
+INCLUDEPATH += $$PWD/Data
 
 SOURCES += \
+    Data/datamanager.cpp \
     Dialog/robotdialog.cpp \
     Robot/robot.cpp \
-    Robot/robotcontroller.cpp \
     Robot/robotmanager.cpp \
+    Task/robotcontroller.cpp \
     Task/task.cpp \
     Task/taskmanager.cpp \
+    Task/taskscheduler.cpp \
     loginwindow.cpp \
     main.cpp \
-    mainwindow.cpp
+    mainwindow.cpp \
+    mapwidget.cpp
 
 HEADERS += \
+    Data/datamanager.h \
     Dialog/robotdialog.h \
     Robot/robot.h \
-    Robot/robotcontroller.h \
     Robot/robotmanager.h \
+    Task/robotcontroller.h \
     Task/task.h \
     Task/taskmanager.h \
+    Task/taskscheduler.h \
     loginwindow.h \
-    mainwindow.h
+    mainwindow.h \
+    mapwidget.h
 
 FORMS += \
     mainwindow.ui \

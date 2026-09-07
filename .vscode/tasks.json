@@ -4,14 +4,11 @@
         {
             "label": "qmake",
             "type": "shell",
-            "command": "qmake",
-            "args": [
-                "../../AVGRobot.pro"
-            ],
+            "command": "mkdir -p build/vscode && cd build/vscode && qmake ../../AVGRobot.pro",
             "group": "build",
             "problemMatcher": [],
             "options": {
-                "cwd": "${workspaceFolder}/build/vscode"
+                "cwd": "${workspaceFolder}"
             }
         },
         {
@@ -38,13 +35,10 @@
         {
             "label": "Clean",
             "type": "shell",
-            "command": "make",
-            "args": [
-                "clean"
-            ],
+            "command": "mkdir -p build/vscode && cd build/vscode && make clean",
             "group": "build",
             "options": {
-                "cwd": "${workspaceFolder}/build/vscode"
+                "cwd": "${workspaceFolder}"
             }
         },
         {

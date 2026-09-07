@@ -12,6 +12,7 @@ class TaskManager : public QObject
     Q_OBJECT
 public:
     explicit TaskManager(QObject *parent = nullptr);
+    ~TaskManager();
 
     // ========== 任务生命周期 ==========
     bool addTask(const Task &task);
@@ -68,6 +69,8 @@ signals:
     void taskFailed(int taskId);
     void taskCancelled(int taskId);
     void taskReassigned(int taskId);
+
+    void logMessage(const QString &msg, int level);
 
 private:
     void addToPendingList(int taskId);

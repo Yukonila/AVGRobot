@@ -13,7 +13,11 @@ Task::Task(int taskId, int priority, float startX, float startY, float endX, flo
     m_startY = startY;
     m_endX = endX;
     m_endY = endY;
+    m_assignedRobotId = -1;
+    m_status = TaskStatus::Pending;
     m_description = description;
+    m_startTime = QDateTime();
+    m_finishTime = QDateTime();
     m_createTime = QDateTime::currentDateTime();
 }
 
@@ -126,6 +130,21 @@ void Task::setAssignedRobotId(int robotId)
 void Task::setStatus(TaskStatus status)
 {
     m_status = status;
+}
+
+void Task::setCreateTime(const QDateTime &time)
+{
+    m_createTime = time;
+}
+
+void Task::setStartTime(const QDateTime &time)
+{
+    m_startTime = time;
+}
+
+void Task::setFinishTime(const QDateTime &time)
+{
+    m_finishTime = time;
 }
 
 void Task::markAsPending()

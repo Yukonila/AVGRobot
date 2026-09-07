@@ -3,7 +3,8 @@
 
 #include <QMainWindow>
 #include <QTableWidgetItem>
-#include "robotcontroller.h"
+#include "Task/robotcontroller.h"
+#include "mapwidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -27,6 +28,10 @@ private slots:
     void onBtnDeleteRobotClicked();
     void onBtnRefreshClicked();
 
+    // 任务按钮槽
+    void onBtnAddTaskClicked();
+    void onBtnDeleteTaskClicked();
+
     // 机器人列表双击
     void onTableRobotDoubleClicked(int row, int column);
 
@@ -46,13 +51,20 @@ private:
     // 辅助方法
     void appendLog(const QString &msg, int level = 0);
     QString statusToString(RobotStatus status) const;
+    QString taskStatusToString(TaskStatus status) const;
     void refreshRobotTable();
+    void refreshTaskTable();
     void updateStatusBar();
+    void updateSchedulerState();
     int getSelectedRobotId() const;
+    int getSelectedTaskId() const;
+    int getNextRobotId();
     void createMenuBar();
 
     Ui::MainWindow *ui;
     RobotController *m_controller;
+    RobotMapWidget *m_map;
+    int m_nextRobotId = 10001;   // 新建机器人ID从10001开始自增
 };
 
 #endif // MAINWINDOW_H

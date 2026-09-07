@@ -29,6 +29,7 @@ public:
     float getEndY() const;
     int getAssignedRobotId() const;
     TaskStatus getStatus() const;
+
     QDateTime getCreateTime() const;
     QDateTime getStartTime() const;
     QDateTime getFinishTime() const;
@@ -42,6 +43,9 @@ public:
     void setAssignedRobotId(int robotId);
 
     void setStatus(TaskStatus status);
+    void setCreateTime(const QDateTime &time);
+    void setStartTime(const QDateTime &time);
+    void setFinishTime(const QDateTime &time);
     void markAsPending();
     void markAsExecting();
     void markAsCompleted();

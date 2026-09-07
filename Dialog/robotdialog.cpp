@@ -36,18 +36,20 @@ void RobotDialog::setupUI()
         ui->editX->setText("0.0");
         ui->editY->setText("0.0");
         ui->editBattery->setText("100");
+        ui->editSpeed->setText("5.0");
     }
 
     adjustSize();
 }
 
-void RobotDialog::setEditData(int id, const QString &ip, float x, float y, int battery)
+void RobotDialog::setEditData(int id, const QString &ip, float x, float y, int battery, float speed)
 {
     ui->editRobotId->setText(QString::number(id));
     ui->editIp->setText(ip);
     ui->editX->setText(QString::number(x, 'f', 1));
     ui->editY->setText(QString::number(y, 'f', 1));
     ui->editBattery->setText(QString::number(battery));
+    ui->editSpeed->setText(QString::number(speed, 'f', 1));
 }
 
 int RobotDialog::getRobotId() const
@@ -73,6 +75,11 @@ float RobotDialog::getY() const
 int RobotDialog::getBattery() const
 {
     return ui->editBattery->text().toInt();
+}
+
+float RobotDialog::getSpeed() const
+{
+    return ui->editSpeed->text().toFloat();
 }
 
 void RobotDialog::onBtnOkClicked()
@@ -102,6 +109,13 @@ void RobotDialog::onBtnOkClicked()
     if (!ok || battery < 0 || battery > 100)
     {
         QMessageBox::warning(this, "提示", "请输入有效的电量 (0-100)");
+        return;
+    }
+
+    float speed = ui->editSpeed->text().toFloat(&ok);
+    if (!ok || speed < 0)
+    {
+        QMessageBox::warning(this, "提示", "请输入有效的速度 (≥0)");
         return;
     }
 

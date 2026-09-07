@@ -18,13 +18,14 @@ public:
     explicit RobotDialog(bool editMode = false, int robotId = -1, QWidget *parent = nullptr);
     ~RobotDialog();
 
-    void setEditData(int id, const QString &ip, float x, float y, int battery);
+    void setEditData(int id, const QString &ip, float x, float y, int battery, float speed);
 
     int getRobotId() const;
     QString getIp() const;
     float getX() const;
     float getY() const;
     int getBattery() const;
+    float getSpeed() const;
 
 private slots:
     void onBtnOkClicked();
