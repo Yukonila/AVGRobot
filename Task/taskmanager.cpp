@@ -624,7 +624,6 @@ QString TaskManager::printTasksByStatus(TaskStatus status) const
 {
     QMutexLocker locker(&m_mutex);
 
-    // 直接读私有状态表（勿调用会加锁的 getTaskIdsByStatus，避免同线程二次加锁自死锁）
     QList<int> ids;
     switch (status)
     {

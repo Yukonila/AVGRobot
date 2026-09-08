@@ -21,6 +21,7 @@ SOURCES += \
     loginwindow.cpp \
     main.cpp \
     mainwindow.cpp \
+    mapeditor.cpp \
     mapwidget.cpp
 
 HEADERS += \
@@ -34,6 +35,7 @@ HEADERS += \
     Task/taskscheduler.h \
     loginwindow.h \
     mainwindow.h \
+    mapeditor.h \
     mapwidget.h
 
 FORMS += \

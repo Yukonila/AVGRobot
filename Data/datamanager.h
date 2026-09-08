@@ -41,12 +41,14 @@ public:
     bool saveAllData(const QList<Robot> &robots,
                      const QList<Task> &tasks,
                      int tcpPort,
-                     int schedulerInterval);
+                     int schedulerInterval,
+                     bool enableReturnHome);
 
     bool loadAllData(QList<Robot> &outRobots,
                      QList<Task> &outTasks,
                      int &outTcpPort,
-                     int &outSchedulerInterval);
+                     int &outSchedulerInterval,
+                     bool &outEnableReturnHome);
 
 signals:
     void logMessage(const QString &msg, int level);

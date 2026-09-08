@@ -7,7 +7,7 @@
 TaskScheduler::TaskScheduler(TaskManager *taskManager,
                              RobotManager *robotManager,
                              QObject *parent)
-    : QObject(parent), m_taskManager(taskManager), m_robotManager(robotManager), m_timer(nullptr), m_intervalMs(3000), m_isRunning(false)
+    : QObject(parent), m_taskManager(taskManager), m_robotManager(robotManager), m_timer(nullptr), m_intervalMs(3000), m_isRunning(false), m_isReturnHome(false)
 {
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, &TaskScheduler::onTimerTimeout);
@@ -57,6 +57,19 @@ void TaskScheduler::scheduleOnce()
     doScheduling();
 }
 
+void TaskScheduler::setEnableReturnHome(bool enable)
+{
+    m_isReturnHome = enable;
+    emit logMessage("[TaskScheduler] 回原点功能 " +
+                        QString(enable ? "已启用" : "已禁用"),
+                    0);
+}
+
+bool TaskScheduler::isReturnHomeEnabled() const
+{
+    return m_isReturnHome;
+}
+
 void TaskScheduler::setInterval(int ms)
 {
     if (ms < 100)
@@ -87,11 +100,12 @@ void TaskScheduler::doScheduling()
     // 1. 分配待处理任务
     assignPendingTasks();
 
-    // 2. 检查执行中的任务进度
+    // 2. 检查执行中的任务进度(到终点→完成)
     checkExecutingTasks();
 
-    // 3. 让完成任务的机器人回原点
-    returnRobotsToHome();
+    // 注：机器人的"回原点"由 RobotController 的移动模拟负责平滑移动，
+    //     这里不再瞬移，避免与模拟移动冲突。
+    // if (m_isReturnHome) { returnRobotsToHome(); }
 }
 
 void TaskScheduler::assignPendingTasks()
@@ -108,12 +122,19 @@ void TaskScheduler::assignPendingTasks()
     QList<int> idleRobots = m_robotManager->getIdleRobots();
     if (idleRobots.isEmpty())
     {
-        emit logMessage("[TaskScheduler] 没有空闲机器人，任务 " +
-                            QString::number(taskId) + " 等待中",
-                        1);
-        emit noAvailableRobot(taskId);
+        // 只在任务首次开始等待时提示一次，避免每拍刷屏
+        if (taskId != m_lastWaitingTask)
+        {
+            m_lastWaitingTask = taskId;
+            emit logMessage("[TaskScheduler] 没有空闲机器人，任务 " +
+                                QString::number(taskId) + " 待命中(有空闲时自动分配)",
+                            1);
+            emit noAvailableRobot(taskId);
+        }
         return;
     }
+
+    m_lastWaitingTask = -1; // 有空闲机器人了，下次再没空闲时重新提示
 
     // 选择最优机器人
     int bestRobot = selectBestRobotForTask(taskId);
@@ -134,7 +155,6 @@ void TaskScheduler::assignPendingTasks()
                         0);
 
         // 同步机器人侧：记录正在执行的任务ID 并置为忙碌
-        // （机器人表的"任务ID"列、移除保护、isRobotBusy 统计随之一致）
         if (!m_robotManager->assignTaskToRobot(bestRobot, taskId))
         {
             emit logMessage("[TaskScheduler] 同步机器人 " + QString::number(bestRobot) +

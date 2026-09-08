@@ -23,7 +23,8 @@ public:
     void stop();
     bool isRunning() const;
     void scheduleOnce(); // 手动触发一次调度
-
+    void setEnableReturnHome(bool enable);
+    bool isReturnHomeEnabled() const;
     // ========== 配置 ==========
     void setInterval(int ms);
     int getInterval() const;
@@ -63,6 +64,8 @@ private:
     QTimer *m_timer;
     int m_intervalMs;
     bool m_isRunning;
+    bool m_isReturnHome;
+    int m_lastWaitingTask = -1; // 上次提示"无空闲机器人等待"的任务，避免每拍刷屏
 };
 
 #endif // TASKSCHEDULER_H

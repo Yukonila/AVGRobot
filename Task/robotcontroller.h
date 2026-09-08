@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QTimer>
+#include <QHash>
 #include "robotmanager.h"
 #include "taskmanager.h"
 #include "taskscheduler.h"
@@ -52,6 +53,11 @@ public:
     void stopScheduler();
     void scheduleOnce();
     bool isSchedulerRunning() const;
+    void setEnableReturnHome(bool enable);   // 自动回原点开关(空闲即回)
+    bool isReturnHomeEnabled() const;
+    bool returnIdleRobotsToHome();           // 手动“全部(空闲)回原点”，不打断执行中任务
+    void setSimulationMode(bool simulate);   // true=模拟移动; false=由TCP等真实数据更新位置
+    bool isSimulationMode() const;
 
     // ========== 数据持久化(DataManager) ==========
     bool saveData(const QString &filePath = "");
@@ -90,10 +96,20 @@ private:
     TaskManager *m_taskManager;
     TaskScheduler *m_scheduler;
 
-    // 移动模拟（调度运行期间，让忙碌机器人逐步移向任务终点）
+    // 移动模拟（调度运行期间，让机器人逐段移动：任务起点→任务终点→回原点）
     QTimer *m_simTimer;
-    void stepRobots();   // 每拍推进机器人位置
+    void stepRobots(); // 每拍推进机器人位置
     int m_simIntervalMs;
+    bool m_isReturnHome;    // 自动回原点开关(默认开)
+    bool m_homeIdleNow;     // “全部回原点”一次性触发标记
+    bool m_simulateMovement;// 模拟模式=true; TCP接入后由真实数据更新位置=false
+
+    // 每台机器人“当前任务→是否已到达过任务起点(锁定下一步去终点)”
+    QHash<int, int> m_robotTaskPhase;   // robotId -> taskId
+    QHash<int, bool> m_robotStartDone;  // robotId -> 已到过起点
+
+    // 回原点阶段日志标记：0=未提示,1=已提示返回中,2=已提示回到
+    QHash<int, int> m_robotReturnStage;
 };
 
 #endif // ROBOTCONTROLLER_H

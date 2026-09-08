@@ -3,6 +3,7 @@
 
 #include <QLineEdit>
 #include <QPushButton>
+#include <QComboBox>
 #include <QLabel>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -13,7 +14,7 @@ static const char *kDefaultUser = "koni";
 static const char *kDefaultPass = "123";
 
 LoginWindow::LoginWindow(QWidget *parent)
-    : QDialog(parent), m_userEdit(nullptr), m_passEdit(nullptr), m_btnLogin(nullptr), m_btnCancel(nullptr), m_mainWindow(nullptr)
+    : QDialog(parent), m_userEdit(nullptr), m_passEdit(nullptr), m_btnLogin(nullptr), m_btnCancel(nullptr), m_modeCombo(nullptr), m_mainWindow(nullptr)
 {
     setWindowTitle("登录 - AVG 物流机器人任务调度系统");
     setMinimumWidth(340);
@@ -32,9 +33,15 @@ LoginWindow::LoginWindow(QWidget *parent)
     m_btnLogin = new QPushButton("登 录", this);
     m_btnCancel = new QPushButton("取 消", this);
 
+    // 运行模式选择
+    m_modeCombo = new QComboBox(this);
+    m_modeCombo->addItem("模拟机器人(自动移动演示)", 0);
+    m_modeCombo->addItem("TCP 接入真实机器人", 1);
+
     auto *form = new QFormLayout;
     form->addRow(userLabel, m_userEdit);
     form->addRow(passLabel, m_passEdit);
+    form->addRow("运行模式:", m_modeCombo);
     form->addRow(hintLabel);
 
     auto *btnRow = new QHBoxLayout;
@@ -97,7 +104,9 @@ void LoginWindow::openMainWindow()
         m_mainWindow = nullptr;
     }
 
-    m_mainWindow = new MainWindow();
+    // 依据登录页选择的运行模式创建主窗口(0=模拟, 1=TCP)
+    bool simulate = (m_modeCombo->currentData().toInt() == 0);
+    m_mainWindow = new MainWindow(nullptr, simulate);
     connect(m_mainWindow, &MainWindow::logoutRequested,
             this, &LoginWindow::onMainLogout);
 

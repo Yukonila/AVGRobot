@@ -5,6 +5,7 @@
 #include <QTableWidgetItem>
 #include "Task/robotcontroller.h"
 #include "mapwidget.h"
+#include "mapeditor.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -18,7 +19,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    MainWindow(QWidget *parent = nullptr, bool simulate = true);
     ~MainWindow();
 
 private slots:
@@ -46,6 +47,7 @@ private slots:
 signals:
     // 请求退出登录并返回登录界面（由登录窗口监听处理）
     void logoutRequested();
+    
 
 private:
     // 辅助方法
@@ -65,8 +67,9 @@ private:
     Ui::MainWindow *ui;
     RobotController *m_controller;
     RobotMapWidget *m_map;
-    int m_nextRobotId = 10001;   // 新建机器人ID从10001开始自增
-    int m_nextTaskId = 1;        // 新建任务ID从1开始自增
+    MapEditorWidget *m_mapEditor;
+    int m_nextRobotId = 10001; // 新建机器人ID从10001开始自增
+    int m_nextTaskId = 1;      // 新建任务ID从1开始自增
 };
 
 #endif // MAINWINDOW_H

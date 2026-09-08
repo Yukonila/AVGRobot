@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabMain">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="robotPage">
        <attribute name="title">
@@ -28,13 +28,13 @@
         <item>
          <widget class="QTableWidget" name="tableRobot">
           <property name="editTriggers">
-           <set>QAbstractItemView::NoEditTriggers</set>
+           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
           </property>
           <property name="alternatingRowColors">
            <bool>true</bool>
           </property>
           <property name="selectionBehavior">
-           <enum>QAbstractItemView::SelectRows</enum>
+           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
           </property>
          </widget>
         </item>
@@ -71,7 +71,7 @@
           <item>
            <spacer name="robotButtonSpacer">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -102,7 +102,7 @@
           <item>
            <spacer name="schedulerSpacer">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -138,13 +138,13 @@
         <item>
          <widget class="QTableWidget" name="tableTask">
           <property name="editTriggers">
-           <set>QAbstractItemView::NoEditTriggers</set>
+           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
           </property>
           <property name="alternatingRowColors">
            <bool>true</bool>
           </property>
           <property name="selectionBehavior">
-           <enum>QAbstractItemView::SelectRows</enum>
+           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
           </property>
          </widget>
         </item>
@@ -174,7 +174,7 @@
           <item>
            <spacer name="taskButtonSpacer">
             <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <enum>Qt::Orientation::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -191,13 +191,67 @@
      </widget>
     </item>
     <item>
-     <widget class="QTextBrowser" name="textLog">
+     <layout class="QHBoxLayout" name="logToolbarLayout">
+      <item>
+       <widget class="QLabel" name="logTitleLabel">
+        <property name="text">
+         <string>运行日志</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="logToolbarSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+      <item>
+       <widget class="QPushButton" name="btnClearLog">
+        <property name="text">
+         <string>清空日志</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <widget class="QTabWidget" name="logTabs">
       <property name="maximumSize">
        <size>
         <width>16777215</width>
-        <height>150</height>
+        <height>170</height>
        </size>
       </property>
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="robotLogPage">
+       <attribute name="title">
+        <string>机器人日志</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="robotLogPageLayout">
+        <item>
+         <widget class="QTextBrowser" name="textLog"/>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="taskLogPage">
+       <attribute name="title">
+        <string>任务日志</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="taskLogPageLayout">
+        <item>
+         <widget class="QTextBrowser" name="taskLog"/>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
    </layout>

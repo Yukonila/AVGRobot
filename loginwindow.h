@@ -5,6 +5,7 @@
 
 class QLineEdit;
 class QPushButton;
+class QComboBox;
 class MainWindow;
 
 class LoginWindow : public QDialog
@@ -28,6 +29,7 @@ private:
     QLineEdit *m_passEdit;
     QPushButton *m_btnLogin;
     QPushButton *m_btnCancel;
+    QComboBox *m_modeCombo;   // 运行模式: 0=模拟机器人, 1=TCP接入真实机器人
 
     MainWindow *m_mainWindow;
 };

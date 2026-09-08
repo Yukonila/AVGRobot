@@ -95,20 +95,20 @@ bool DataManager::saveToFile(const QString &filePath)
 bool DataManager::saveAllData(const QList<Robot> &robots,
                               const QList<Task> &tasks,
                               int tcpPort,
-                              int schedulerInterval)
+                              int schedulerInterval,
+                              bool enableReturnHome)
 {
     QJsonObject root;
-
-    // 保存机器人
     root["robots"] = robotsToJson(robots);
-
-    // 保存任务
     root["tasks"] = tasksToJson(tasks);
 
-    // 保存配置
-    root["config"] = configToJson();
-    root["config"].toObject()["tcpPort"] = tcpPort;
-    root["config"].toObject()["schedulerInterval"] = schedulerInterval;
+    
+    QJsonObject config;
+    config["tcpPort"] = tcpPort;
+    config["schedulerInterval"] = schedulerInterval;
+    config["enableReturnHome"] = enableReturnHome;
+    config["lowBatteryThreshold"] = 20;
+    root["config"] = config;
 
     // 写入文件
     QJsonDocument doc(root);
@@ -129,21 +129,21 @@ bool DataManager::saveAllData(const QList<Robot> &robots,
 bool DataManager::loadAllData(QList<Robot> &outRobots,
                               QList<Task> &outTasks,
                               int &outTcpPort,
-                              int &outSchedulerInterval)
+                              int &outSchedulerInterval,
+                              bool &outEnableReturnHome)
 {
+    outTcpPort = 8888;
+    outSchedulerInterval = 3000;
+    outEnableReturnHome = true;
+
     if (!loadFromFile())
     {
-        // 文件不存在，使用默认值
-        outTcpPort = 8888;
-        outSchedulerInterval = 3000;
         return false;
     }
 
     QFile file(m_filePath);
     if (!file.open(QIODevice::ReadOnly))
     {
-        outTcpPort = 8888;
-        outSchedulerInterval = 3000;
         return false;
     }
 
@@ -153,8 +153,6 @@ bool DataManager::loadAllData(QList<Robot> &outRobots,
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull() || !doc.isObject())
     {
-        outTcpPort = 8888;
-        outSchedulerInterval = 3000;
         return false;
     }
 
@@ -180,14 +178,11 @@ bool DataManager::loadAllData(QList<Robot> &outRobots,
         QJsonObject config = root["config"].toObject();
         outTcpPort = config.value("tcpPort").toInt(8888);
         outSchedulerInterval = config.value("schedulerInterval").toInt(3000);
+        outEnableReturnHome = config.value("enableReturnHome").toBool(true);
         emit logMessage("[DataManager] 配置加载成功: 端口=" + QString::number(outTcpPort) +
-                            ", 调度间隔=" + QString::number(outSchedulerInterval) + "ms",
+                            ", 调度间隔=" + QString::number(outSchedulerInterval) + "ms" +
+                            ", 自动回原点=" + (outEnableReturnHome ? "开" : "关"),
                         0);
-    }
-    else
-    {
-        outTcpPort = 8888;
-        outSchedulerInterval = 3000;
     }
 
     return true;
@@ -355,6 +350,7 @@ QJsonObject DataManager::configToJson() const
     // 默认值，实际由 saveAllData 覆盖
     config["tcpPort"] = 8888;
     config["schedulerInterval"] = 3000;
+    config["enableReturnHome"] = true;
     config["lowBatteryThreshold"] = 20;
     return config;
 }

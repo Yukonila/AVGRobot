@@ -20,10 +20,13 @@
 #include <QHeaderView>
 #include <QPushButton>
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(QWidget *parent, bool simulate)
     : QMainWindow(parent), ui(new Ui::MainWindow), m_controller(new RobotController(this))
 {
     ui->setupUi(this);
+
+    // 依据登录时选择的运行模式：true=模拟移动，false=TCP(空壳，等真实数据)
+    m_controller->setSimulationMode(simulate);
 
     // 初始化
     createMenuBar();
@@ -99,6 +102,46 @@ MainWindow::MainWindow(QWidget *parent)
     m_map->setController(m_controller);
     ui->tabMain->addTab(m_map, "地图监控");
 
+    // ========== 地图编辑页 ==========
+    m_mapEditor = new MapEditorWidget(ui->tabMain);
+    ui->tabMain->addTab(m_mapEditor, "地图编辑");
+    m_mapEditor->loadFromFile(MapEditorWidget::defaultMapPath()); // 尝试载入已保存的地图
+
+    // 地图监控叠加同一张地图的障碍
+    m_map->setMapSource(m_mapEditor);
+
+    // 清空日志
+    connect(ui->btnClearLog, &QPushButton::clicked, this, [this]()
+            {
+        ui->textLog->clear();
+        ui->taskLog->clear();
+        appendLog("日志已清空", 1); });
+
+    connect(m_map, &RobotMapWidget::returnHomeToggled,
+            this, [this](bool enabled)
+            {
+                m_controller->setEnableReturnHome(enabled);
+                appendLog(QString("回原点功能 %1").arg(enabled ? "已启用" : "已禁用"), 0); });
+
+    // 地图点击机器人 → 记录该机器人当前信息
+    connect(m_map, &RobotMapWidget::robotSelected,
+            this, [this](int robotId)
+            {
+                const Robot *r = m_controller->getRobot(robotId);
+                if (!r)
+                    return;
+                appendLog(QString("[地图] 选中机器人 %1 | 状态:%2 | 位置:(%3,%4) | 速度:%5 | 任务:%6")
+                              .arg(robotId)
+                              .arg(statusToString(r->getStatus()))
+                              .arg(r->getPx(), 0, 'f', 1)
+                              .arg(r->getPy(), 0, 'f', 1)
+                              .arg(r->getSpeed(), 0, 'f', 1)
+                              .arg(r->getTask()),
+                          1);
+            });
+
+
+    m_map->setEnableReturnHome(m_controller->isReturnHomeEnabled());
     appendLog("系统初始化完成", 0);
 }
 
@@ -572,32 +615,48 @@ QString MainWindow::taskStatusToString(TaskStatus status) const
 
 void MainWindow::appendLog(const QString &msg, int level)
 {
+    // 判断日志归属：任务相关日志进"任务日志"，其余(机器人/系统)进"机器人日志"
+    bool isTaskMsg = msg.contains("[TaskScheduler]") ||
+                     msg.contains("[TaskManager]") ||
+                     msg.contains("[任务]") ||
+                     msg.contains("[调度]");
+    QTextBrowser *tb = isTaskMsg ? ui->taskLog : ui->textLog;
+
+    // 按日志等级着色
     QString prefix;
+    QString color;
     switch (level)
     {
-    case 0:
+    case 0: // INFO
         prefix = "[INFO] ";
+        color = "#1a7f37";
         break;
-    case 1:
+    case 1: // DEBUG
         prefix = "[DEBUG]";
+        color = "#6b7280";
         break;
-    case 2:
+    case 2: // ERROR
         prefix = "[ERROR]";
+        color = "#d92332";
         break;
-    case 3:
+    case 3: // WARN
         prefix = "[WARN] ";
+        color = "#e8930c";
         break;
     default:
         prefix = "[LOG]  ";
+        color = "#333333";
         break;
     }
 
     QString timeStr = QDateTime::currentDateTime().toString("hh:mm:ss");
-    ui->textLog->append(QString("%1 %2 %3").arg(timeStr, prefix, msg));
+    QString line = QString("%1 %2 %3").arg(timeStr, prefix, msg.toHtmlEscaped());
 
-    QTextCursor cursor = ui->textLog->textCursor();
+    QTextCursor cursor = tb->textCursor();
     cursor.movePosition(QTextCursor::End);
-    ui->textLog->setTextCursor(cursor);
+    cursor.insertHtml(QString("<span style=\"color:%1;\">%2</span><br>").arg(color, line));
+    cursor.movePosition(QTextCursor::End);
+    tb->setTextCursor(cursor);
 }
 
 QString MainWindow::statusToString(RobotStatus status) const
