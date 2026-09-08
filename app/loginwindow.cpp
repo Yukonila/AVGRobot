@@ -37,15 +37,12 @@ LoginWindow::LoginWindow(QWidget *parent)
     m_pass2Edit = new QLineEdit(this);
     m_pass2Edit->setEchoMode(QLineEdit::Password);
 
-    // 账号库：载入；无账号时会自动建默认管理员 admin/admin123
+    // 账号库：载入；无账号时会自动建唯一管理员 koni/123
     m_users.load();
 
     m_hint = new QLabel(this);
     m_hint->setStyleSheet("color: #666;");
-    if (m_users.count() == 1)
-        m_hint->setText("默认管理员: admin / admin123\n(第一个注册的账号会成为管理员)");
-    else
-        m_hint->setText("第一个注册的账号会成为管理员");
+    m_hint->setText("管理员账号: koni / 123\n(注册的账号均为普通用户)");
 
     m_btnLogin = new QPushButton("登 录", this);
     m_btnRegister = new QPushButton("注 册", this);
@@ -127,10 +124,7 @@ void LoginWindow::onRegisterClicked()
     }
     if (m_users.addUser(user, pass))
     {
-        bool isFirst = (m_users.count() == 1);
-        showStatus(isFirst ? QString("注册成功，%1 为管理员，请登录").arg(user)
-                           : QString("注册成功，%1 为普通用户，请登录").arg(user),
-                   true);
+        showStatus(QString("注册成功，%1 为普通用户，请登录").arg(user), true);
         m_passEdit->clear();
         m_pass2Edit->clear();
     }

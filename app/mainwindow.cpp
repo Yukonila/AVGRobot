@@ -134,12 +134,18 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
             this, [this]() { refreshTaskTable(); appendLog("任务列表已刷新", 1); });
 
     // ========== 调度控制按钮 ==========
+    // 调度前强制同步画布障碍，避免首个任务用了空网格而直线穿障
+    auto pushGridNow = [this]()
+    {
+        m_controller->setMapGrid(m_mapEditor->columns(), m_mapEditor->rows(),
+                                 m_mapEditor->obstacleGrid());
+    };
     connect(ui->btnStartScheduler, &QPushButton::clicked,
-            this, [this]() { m_controller->startScheduler(1000); });
+            this, [this, pushGridNow]() { pushGridNow(); m_controller->startScheduler(1000); });
     connect(ui->btnStopScheduler, &QPushButton::clicked,
             this, [this]() { m_controller->stopScheduler(); });
     connect(ui->btnScheduleOnce, &QPushButton::clicked,
-            this, [this]() { m_controller->scheduleOnce(); refreshTaskTable(); });
+            this, [this, pushGridNow]() { pushGridNow(); m_controller->scheduleOnce(); refreshTaskTable(); });
 
     // 新建任务改在地图画布上完成(点起点/终点)，隐藏旧的“数字输入”入口
     ui->btnAddTask->setVisible(false);
@@ -159,6 +165,18 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
     };
     connect(m_mapEditor, &MapEditorWidget::mapChanged, this, pushGrid);
     pushGrid();
+
+    // ===== 先画障碍/载入地图，才开放机器人/任务/调度(标签1=机器人表, 2=任务表) =====
+    ui->tabMain->setTabEnabled(1, false);
+    ui->tabMain->setTabEnabled(2, false);
+    auto applyMapGate = [this]()
+    {
+        bool ready = m_mapEditor->mapLoaded();
+        ui->tabMain->setTabEnabled(1, ready);
+        ui->tabMain->setTabEnabled(2, ready);
+    };
+    connect(m_mapEditor, &MapEditorWidget::mapChanged, this, applyMapGate);
+    applyMapGate();
 
     // 画布点好起点/终点 → 创建任务
     connect(m_mapEditor, &MapEditorWidget::requestAddTask,
@@ -300,6 +318,24 @@ void MainWindow::createMenuBar()
         {
             QMessageBox::warning(this, "载入失败", "未找到或无法解析数据文件");
         } });
+
+    // 载入地图与机器人(不含任务) —— 先载入画布地图，再只载入机器人
+    if (m_isAdmin)
+    {
+        QAction *loadRobotsAction = fileMenu->addAction("载入地图与机器人(不含任务)...");
+        connect(loadRobotsAction, &QAction::triggered, this, [this]()
+                {
+            m_mapEditor->loadFromFile(MapEditorWidget::defaultMapPath()); // 载入地图(自动推网格)
+            if (!m_controller->loadRobotsOnly())
+            {
+                QMessageBox::warning(this, "载入", "未找到数据文件或载入失败");
+                return;
+            }
+            refreshRobotTable();
+            refreshTaskTable();
+            updateStatusBar();
+            updateSchedulerState(); });
+    }
     fileMenu->addSeparator();
 
     // 账号管理(仅管理员)
@@ -334,8 +370,11 @@ void MainWindow::createMenuBar()
 
 void MainWindow::onBtnAddRobotClicked()
 {
-    // 打开添加对话框（默认ID从10001开始自增）
-    RobotDialog dialog(false, getNextRobotId(), this);
+    int nextId = getNextRobotId();
+    RobotDialog dialog(false, nextId, this);
+    // 新建时预填"充电桩为圆心、圆内随机"的出生点
+    QPointF sp = m_controller->nextSpawnPos();
+    dialog.presetSpawn((float)sp.x(), (float)sp.y());
     if (dialog.exec() == QDialog::Accepted)
     {
         int id = dialog.getRobotId();
@@ -349,8 +388,9 @@ void MainWindow::onBtnAddRobotClicked()
 
         if (m_controller->addRobot(id, ip))
         {
-            // 添加成功后设置初始位置、电量、速度与参数配置
-            m_controller->updatePosition(id, x, y);
+            // 若用户未填位置(默认0,0)，则保持系统"家/充电桩周围"的生成位置，不覆盖
+            if (x != 0.0f || y != 0.0f)
+                m_controller->updatePosition(id, x, y);
             m_controller->updateBattery(id, battery);
             m_controller->updateSpeed(id, speed);
             m_controller->updateRobotAccel(id, accel);

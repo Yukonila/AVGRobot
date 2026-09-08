@@ -96,6 +96,12 @@ int RobotDialog::getMaxLoad() const
     return ui->editMaxLoad->text().toInt();
 }
 
+void RobotDialog::presetSpawn(float x, float y)
+{
+    ui->editX->setText(QString::number(x, 'f', 1));
+    ui->editY->setText(QString::number(y, 'f', 1));
+}
+
 void RobotDialog::onBtnOkClicked()
 {
     // 简单验证

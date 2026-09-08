@@ -5,6 +5,7 @@
 #include <QPoint>
 #include <QPointF>
 #include <QVector>
+#include <QList>
 
 class QComboBox;
 class QPushButton;
@@ -51,6 +52,8 @@ public:
     // 是否允许编辑地图(管理员=true；普通用户仅新建任务/查看=false)
     void setEditable(bool editable);
     bool isEditable() const { return m_editable; }
+    // 是否已画出/载入地图(用于主界面“先有地图再操作”的门控)
+    bool mapLoaded() const { return m_loadedAny; }
 
 signals:
     void mapChanged();
@@ -90,6 +93,7 @@ private:
     int m_tool;
     bool m_dragging;
     bool m_editable = true;
+    bool m_loadedAny = false; // 是否已有地图内容(障碍/载入)
 
     RobotController *m_controller;
     QPoint m_pickStart; // 新建任务模式已选的第1点(-1,-1 表示未选)
@@ -99,14 +103,19 @@ private:
     QPushButton *m_btnSave;
     QPushButton *m_btnLoad;
     QPushButton *m_btnNewTask;
+    QPushButton *m_btnStart;   // 开始调度/开始行动
+    QPushButton *m_btnRmLast;  // 删除上一个任务(新建任务时可见)
+    QPushButton *m_btnClearTasks; // 清空任务(新建任务时可见)
     QSpinBox *m_colSpin;
     QSpinBox *m_rowSpin;
     QPushButton *m_btnApplySize;
-    QCheckBox *m_chkAutoHome;   // 自动回原点
-    QPushButton *m_btnAllHome;  // 全部回原点
+    QCheckBox *m_chkAutoHome;   // 自动回原点(隐藏占位)
+    QPushButton *m_btnAllHome;  // 全部回原点(隐藏占位)
+    QList<QPushButton *> m_editOnly; // 仅管理员可见的删除按钮
+    QList<QPushButton *> m_design;   // 地图设计类按钮(新建任务时隐藏)
     QLabel *m_status;
 
-    int m_topH; // 顶部工具栏占用的高度
+    int m_topH; // 顶部工具栏占用的高度(两行)
 };
 
 #endif // MAPEDITOR_H

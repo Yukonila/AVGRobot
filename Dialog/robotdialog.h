@@ -19,6 +19,7 @@ public:
     ~RobotDialog();
 
     void setEditData(int id, const QString &ip, float x, float y, int battery, float speed, float accel, int maxLoad);
+    void presetSpawn(float x, float y); // 新建时预填生成位置
 
     int getRobotId() const;
     QString getIp() const;

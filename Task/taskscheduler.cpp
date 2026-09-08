@@ -209,8 +209,6 @@ void TaskScheduler::checkExecutingTasks()
             continue;
         }
 
-        float dx = robot->getPx() - task->getEndX();
-        float dy = robot->getPy() - task->getEndY();
         float distance = calculateDistance(robot->getPx(), robot->getPy(),
                                            task->getEndX(), task->getEndY());
 

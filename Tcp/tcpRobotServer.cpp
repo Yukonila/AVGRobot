@@ -123,7 +123,6 @@ void TcpRobotServer::onReadyRead()
             quint8 x = 0;
             for (int i = 2; i <= 4 + dlen; ++i)
                 x ^= quint8(buf[i]); // 长度(2)+功能码(1)+数据(dlen)
-            quint8 func = quint8(buf[4]);
             QByteArray payload = buf.mid(5, dlen);
             if (x == stored)
                 handleLine(sock, payload); // payload 为 JSON(状态上报)

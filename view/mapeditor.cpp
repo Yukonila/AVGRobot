@@ -18,6 +18,7 @@
 #include <QFile>
 #include <QDir>
 #include <QMessageBox>
+#include <functional>
 #include <cmath>
 
 static QString robotStatusName(int status);
@@ -48,13 +49,16 @@ MapEditorWidget::MapEditorWidget(QWidget *parent)
     , m_btnSave(nullptr)
     , m_btnLoad(nullptr)
     , m_btnNewTask(nullptr)
+    , m_btnStart(nullptr)
+    , m_btnRmLast(nullptr)
+    , m_btnClearTasks(nullptr)
     , m_colSpin(nullptr)
     , m_rowSpin(nullptr)
     , m_btnApplySize(nullptr)
     , m_chkAutoHome(nullptr)
     , m_btnAllHome(nullptr)
     , m_status(nullptr)
-    , m_topH(30)
+    , m_topH(60)
 {
     setupToolbar();
     setMouseTracking(true);
@@ -98,9 +102,9 @@ void MapEditorWidget::setController(RobotController *controller)
 
 void MapEditorWidget::startNewTaskMode()
 {
-    m_tool = 4;
+    m_tool = 2;
     if (m_toolCombo)
-        m_toolCombo->setCurrentIndex(4);
+        m_toolCombo->setCurrentIndex(2);
     m_pickStart = QPoint(-1, -1);
     setStatusText("新建任务: 请点第 1 点作为任务起点");
 }
@@ -127,8 +131,6 @@ void MapEditorWidget::setupToolbar()
     m_toolCombo = new QComboBox(this);
     m_toolCombo->addItem("画障碍");
     m_toolCombo->addItem("擦除");
-    m_toolCombo->addItem("设起点");
-    m_toolCombo->addItem("设终点");
     m_toolCombo->addItem("新建任务");
     m_toolCombo->addItem("设充电桩");
     m_toolCombo->addItem("查看/选择");
@@ -139,26 +141,29 @@ void MapEditorWidget::setupToolbar()
             {
                 m_tool = idx;
                 m_pickStart = QPoint(-1, -1);
-                if (idx == 4)
+                if (idx == 2)
                     setStatusText("新建任务: 请点第 1 点作为任务起点");
-                else if (idx == 5)
+                else if (idx == 3)
                     setStatusText("请点击地图位置放置充电桩");
-                else if (idx == 6)
+                else if (idx == 4)
                     setStatusText("查看/选择: 点击机器人查看详情");
                 else if (idx == 0)
                     setStatusText("画障碍: 左键画 / 右键擦除");
                 else if (idx == 1)
                     setStatusText("擦除: 左键/右键擦除");
-                else if (idx == 2)
-                    setStatusText("请在地图上点选起点格子");
-                else if (idx == 3)
-                    setStatusText("请在地图上点选终点格子");
             });
     x += 98;
 
     m_btnNewTask = new QPushButton("新建任务", this);
     placeControl(m_btnNewTask, x);
     connect(m_btnNewTask, &QPushButton::clicked, this, &MapEditorWidget::startNewTaskMode);
+
+    m_btnStart = new QPushButton("开始调度/行动", this);
+    m_btnStart->setFixedSize(104, 24);
+    m_btnStart->move(x, 3);
+    x += 112;
+    connect(m_btnStart, &QPushButton::clicked, this, [this]()
+            { if (m_controller) m_controller->startScheduler(1000); });
 
     m_btnClear = new QPushButton("清空障碍", this);
     placeControl(m_btnClear, x);
@@ -209,21 +214,83 @@ void MapEditorWidget::setupToolbar()
     x += 80;
     connect(m_btnApplySize, &QPushButton::clicked, this, &MapEditorWidget::applySize);
 
-    // 回原点控制
+    // 自动回原点功能已移除：空闲机器人固定回最近充电桩，这两控件隐藏留空(占位)
     m_chkAutoHome = new QCheckBox("自动回原点", this);
-    m_chkAutoHome->setChecked(true);
+    m_chkAutoHome->setVisible(false);
     m_chkAutoHome->setGeometry(x, 3, 96, 24);
     x += 100;
     m_btnAllHome = new QPushButton("全部回原点", this);
+    m_btnAllHome->setVisible(false);
     m_btnAllHome->setFixedSize(90, 24);
     m_btnAllHome->move(x, 3);
     x += 98;
-    connect(m_btnAllHome, &QPushButton::clicked, this, [this]()
-            { if (m_controller) m_controller->returnIdleRobotsToHome(); });
 
     m_status = new QLabel(this);
     m_status->setGeometry(x + 8, 3, 260, 24);
     m_status->setStyleSheet("color:#444;");
+
+    // ===== 第二行：删除/清空按钮(仅管理员) =====
+    int x2 = 6;
+    // 解除卡位(所有人可用)
+    {
+        auto *b = new QPushButton("解除卡位", this);
+        b->setFixedSize(104, 24);
+        b->move(x2, 31);
+        x2 += 112;
+        connect(b, &QPushButton::clicked, this, [this]()
+                { if (m_controller) m_controller->resolveConflicts(); });
+    }
+
+    auto addDelBtn = [&](const QString &text, std::function<void()> fn)
+    {
+        auto *b = new QPushButton(text, this);
+        b->setFixedSize(104, 24);
+        b->move(x2, 31);
+        x2 += 112;
+        connect(b, &QPushButton::clicked, this, [fn]() { fn(); });
+        m_editOnly.append(b);
+        return b;
+    };
+    addDelBtn("清空充电桩", [this]()
+              { if (m_controller) m_controller->clearChargers(); setStatusText("已清空全部充电桩"); });
+    addDelBtn("清空全部机器人", [this]()
+              { if (m_controller) m_controller->removeAllRobots(); });
+
+    // 删除上一个任务 / 清空任务：放在“新建任务”场景，默认隐藏(管理员)
+    auto makeTaskDel = [&](const QString &text, std::function<void()> fn)
+    {
+        auto *b = new QPushButton(text, this);
+        b->setFixedSize(110, 24);
+        b->move(x2, 31);
+        x2 += 118;
+        connect(b, &QPushButton::clicked, this, [fn]() { fn(); });
+        return b;
+    };
+    m_btnRmLast = makeTaskDel("删除上一个任务", [this]()
+                              { if (m_controller) m_controller->removeNewestTask(); });
+    m_btnClearTasks = makeTaskDel("清空任务", [this]()
+                                  { if (m_controller) m_controller->clearAllTasks(); });
+
+    // 地图设计类按钮：新建任务(工具2)时隐藏设计按钮、显示“任务管理”按钮
+    auto setDesignMode = [this](bool designOn)
+    {
+        m_btnSave->setVisible(designOn);
+        m_btnLoad->setVisible(designOn);
+        m_btnClear->setVisible(designOn);
+        m_btnApplySize->setVisible(designOn);
+        m_colSpin->setVisible(designOn);
+        m_rowSpin->setVisible(designOn);
+        for (QPushButton *b : m_editOnly)
+            if (b)
+                b->setVisible(designOn && m_editable); // 充电桩/全部机器人删除(仅设计时)
+        if (m_btnRmLast)
+            m_btnRmLast->setVisible(!designOn && m_editable); // 新建任务时出现
+        if (m_btnClearTasks)
+            m_btnClearTasks->setVisible(!designOn && m_editable);
+    };
+    connect(m_toolCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this, setDesignMode](int idx) { setDesignMode(idx != 2); });
+    setDesignMode(m_tool != 2);
 }
 
 void MapEditorWidget::placeControl(QWidget *w, int &x)
@@ -301,12 +368,15 @@ QPoint MapEditorWidget::cellCenterScreen(const QPoint &cell) const
 void MapEditorWidget::setEditable(bool editable)
 {
     m_editable = editable;
-    if (!editable && (m_tool != 4))
+    for (QPushButton *b : m_editOnly)
+        if (b)
+            b->setVisible(editable); // 删除类按钮仅管理员可见
+    if (!editable && (m_tool != 2))
     {
         // 非编辑(普通)用户只能新建任务/查看
-        m_tool = 4;
+        m_tool = 2;
         if (m_toolCombo)
-            m_toolCombo->setCurrentIndex(4);
+            m_toolCombo->setCurrentIndex(2);
         setStatusText("只读+新建任务模式");
     }
 }
@@ -343,7 +413,7 @@ void MapEditorWidget::applyTool(const QPoint &cell)
     if (cell.x() < 0)
         return;
 
-    if (m_tool == 6) // 查看/选择：显示机器人详情
+    if (m_tool == 4) // 查看/选择：显示机器人详情
     {
         QPointF w = cellWorldCenter(cell);
         int rid = -1;
@@ -365,7 +435,7 @@ void MapEditorWidget::applyTool(const QPoint &cell)
         return;
     }
 
-    if (m_tool == 4) // 新建任务：点两点定起终点(普通用户也允许)
+    if (m_tool == 2) // 新建任务：点两点定起终点(普通用户也允许)
     {
         if (m_pickStart.x() < 0)
         {
@@ -391,7 +461,7 @@ void MapEditorWidget::applyTool(const QPoint &cell)
         return;
     }
 
-    // 非编辑用户(普通)不能画障碍/改点/放充电桩
+    // 非编辑用户(普通)不能画障碍/放充电桩
     if (!m_editable)
         return;
 
@@ -399,21 +469,13 @@ void MapEditorWidget::applyTool(const QPoint &cell)
     switch (m_tool)
     {
     case 0: // 画障碍
-        if (cell != m_start && cell != m_end)
-            m_grid[idx] = 1;
+        m_grid[idx] = 1;
+        m_loadedAny = true;
         break;
     case 1: // 擦除
         m_grid[idx] = 0;
         break;
-    case 2: // 设地图起点(展示标记)
-        m_start = cell;
-        m_grid[idx] = 0;
-        break;
-    case 3: // 设地图终点(展示标记)
-        m_end = cell;
-        m_grid[idx] = 0;
-        break;
-    case 5: // 设充电桩
+    case 3: // 设充电桩
         if (m_controller)
         {
             QPointF w = cellWorldCenter(cell);
@@ -679,7 +741,7 @@ void MapEditorWidget::paintEvent(QPaintEvent *)
     }
 
     // 新建任务已选的第 1 点
-    if (m_tool == 4 && m_pickStart.x() >= 0)
+    if (m_tool == 2 && m_pickStart.x() >= 0)
     {
         QPoint c = cellCenterScreen(m_pickStart);
         QRectF tr(c.x() - m_cell / 2, c.y() - m_cell / 2, m_cell, m_cell);
@@ -795,6 +857,7 @@ bool MapEditorWidget::loadFromFile(const QString &path)
             m_end = QPoint(ex, ey);
     }
     setMinimumSize(m_cols * m_cell + 16, m_rows * m_cell + m_topH + 8);
+    m_loadedAny = true; // 已载入地图
     update();
     emit mapChanged();
     return true;

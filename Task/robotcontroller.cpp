@@ -2,6 +2,7 @@
 #include "Data/datamanager.h"
 #include <QDebug>
 #include <QPoint>
+#include <QRandomGenerator>
 #include <cmath>
 
 RobotController::RobotController(QObject *parent)
@@ -70,7 +71,35 @@ RobotController::~RobotController()
 
 bool RobotController::addRobot(int id, const QString &ip)
 {
-    return m_robotManager->addRobot(id, ip);
+    if (!m_robotManager->addRobot(id, ip))
+        return false;
+    // 新机器人默认放到"充电桩为圆心、圆内随机"的位置(避障)
+    QPointF sp = nextSpawnPos();
+    Robot *r = m_robotManager->getRobot(id);
+    if (r)
+    {
+        r->setPx((float)sp.x());
+        r->setPy((float)sp.y());
+        emit robotPositionChanged(id, (float)sp.x(), (float)sp.y());
+    }
+    return true;
+}
+
+QPointF RobotController::nextSpawnPos() const
+{
+    // 圆心取第一个充电桩(默认画布中部的家)，没有则用中点
+    QPointF center = m_chargers.isEmpty() ? homePoint() : m_chargers.first();
+    const float radius = 4.0f;
+    for (int attempt = 0; attempt < 24; ++attempt)
+    {
+        float ang = QRandomGenerator::global()->generateDouble() * 6.2831853f;
+        float rad = 0.6f + QRandomGenerator::global()->generateDouble() * radius;
+        float cx = (float)center.x() + rad * std::cos(ang);
+        float cy = (float)center.y() + rad * std::sin(ang);
+        if (cx >= 0.0f && cy >= 0.0f && cx < m_gridCols && cy < m_gridRows && !isBlockedWorld(cx, cy))
+            return QPointF(cx, cy);
+    }
+    return center;
 }
 
 bool RobotController::removeRobot(int id)
@@ -182,6 +211,35 @@ bool RobotController::addTask(const Task &task)
 bool RobotController::removeTask(int taskId)
 {
     return m_taskManager->removeTask(taskId);
+}
+
+bool RobotController::removeNewestTask()
+{
+    QList<int> ids = m_taskManager->getAllTaskIds();
+    if (ids.isEmpty())
+        return false;
+    int mx = ids.first();
+    for (int id : ids)
+        if (id > mx)
+            mx = id;
+    return m_taskManager->removeTask(mx);
+}
+
+void RobotController::clearAllTasks()
+{
+    m_taskManager->clearAll();
+}
+
+void RobotController::removeAllRobots()
+{
+    QList<int> ids = m_robotManager->getAllRobotIds();
+    for (int id : ids)
+    {
+        const Robot *r = m_robotManager->getRobot(id);
+        if (r && r->getTask() >= 0)
+            cancelExecutingTask(r->getTask()); // 先释放忙碌机器人
+        m_robotManager->removeRobot(id);
+    }
 }
 
 Task *RobotController::getTask(int taskId)
@@ -510,13 +568,13 @@ void RobotController::clearChargers()
 void RobotController::addDefaultCharger()
 {
     if (m_chargers.isEmpty())
-        m_chargers.append(QPointF(0.5f, 0.5f)); // 原点所在格中心
+        m_chargers.append(homePoint()); // 家的位置(画布中部)
 }
 
 QPointF RobotController::nearestCharger(float x, float y) const
 {
     if (m_chargers.isEmpty())
-        return QPointF(0.5f, 0.5f);
+        return homePoint();
     QPointF best = m_chargers.first();
     float bestD = 1e30f;
     for (const QPointF &c : m_chargers)
@@ -568,6 +626,31 @@ bool RobotController::goChargeIfLow(int robotId)
                         "% 过低，前往充电桩(" + QString::number(target.x(), 'f', 1) + "," +
                         QString::number(target.y(), 'f', 1) + ") 充电",
                     3);
+    return true;
+}
+
+bool RobotController::loadRobotsOnly()
+{
+    DataManager dm(this);
+    connect(&dm, &DataManager::logMessage, this, &RobotController::logMessage);
+
+    QList<Robot> robots;
+    QList<Task> tasks;
+    int port = 8888, interval = 3000;
+    bool retHome = true;
+    if (!dm.loadAllData(robots, tasks, port, interval, retHome))
+    {
+        emit logMessage("[RobotController] 载入机器人失败(数据文件不存在)", 2);
+        return false;
+    }
+
+    // 只替换机器人，任务不载入(仍用当前运行中的任务)
+    m_robotManager->clearAll();
+    for (const Robot &r : robots)
+        m_robotManager->addRobot(r);
+
+    emit logMessage("[RobotController] 已载入 " + QString::number(robots.size()) + " 台机器人(不含任务)",
+                    0);
     return true;
 }
 
@@ -646,8 +729,8 @@ void RobotController::stepBusyRobot(int id, Robot *r, float dt)
         float move = step > dist ? dist : step;
         float nx = r->getPx() + dx / dist * move;
         float ny = r->getPy() + dy / dist * move;
-        if (robotProximityBlocked(id, nx, ny))
-            return; // 前方/附近有其它机器人 → 等待
+        if (robotProximityBlocked(id, nx, ny) || blockedByCharger(id, nx, ny))
+            return; // 前方有机器人/被充电桩格拦住 → 等待
         m_robotManager->updateRobotPosition(id, nx, ny);
         drainBattery(id, move, speed);
         return;
@@ -691,8 +774,8 @@ bool RobotController::stepToward(int id, float tx, float ty, float speed, float 
     const float move = step > dist ? dist : step;
     float nx = r->getPx() + dx / dist * move;
     float ny = r->getPy() + dy / dist * move;
-    if (robotProximityBlocked(id, nx, ny))
-        return true; // 被其它机器人占道 → 等待
+    if (robotProximityBlocked(id, nx, ny) || blockedByCharger(id, nx, ny))
+        return true; // 被其它机器人占道/充电桩格拦住 → 等待
     m_robotManager->updateRobotPosition(id, nx, ny);
     return true;
 }
@@ -716,6 +799,91 @@ bool RobotController::robotProximityBlocked(int id, float nx, float ny) const
     return false;
 }
 
+// 世界坐标落在某充电桩格内时：只有"正要去该桩充电"的机器人可进入，其余机器人都被拦下
+bool RobotController::blockedByCharger(int robotId, float wx, float wy) const
+{
+    for (const QPointF &ch : m_chargers)
+    {
+        float d = std::sqrt((ch.x() - wx) * (ch.x() - wx) + (ch.y() - wy) * (ch.y() - wy));
+        if (d < 0.5f)
+        {
+            QPointF tgt = m_chargeTarget.value(robotId, QPointF(-1, -1));
+            float dt = std::sqrt((ch.x() - tgt.x()) * (ch.x() - tgt.x()) +
+                                 (ch.y() - tgt.y()) * (ch.y() - tgt.y()));
+            if (dt < 0.5f)
+                return false; // 本机正要去该桩
+            return true;      // 其它机器人不可进入充电桩格
+        }
+    }
+    return false;
+}
+
+// 破除对头僵局：把低优先级/靠后的机器人横向挪开约半格(避开障碍)
+void RobotController::resolveConflicts()
+{
+    const float tooClose = 0.9f;
+    QList<int> ids = m_robotManager->getAllRobotIds();
+    QList<int> nudged;
+    for (int i = 0; i < ids.size(); ++i)
+    {
+        for (int j = i + 1; j < ids.size(); ++j)
+        {
+            const Robot *a = m_robotManager->getRobot(ids[i]);
+            const Robot *b = m_robotManager->getRobot(ids[j]);
+            if (!a || !b)
+                continue;
+            float dx = b->getPx() - a->getPx();
+            float dy = b->getPy() - a->getPy();
+            float d = std::sqrt(dx * dx + dy * dy);
+            if (d < 1e-4f)
+                continue; // 完全重合：跳过，避免除以零
+            if (d > tooClose)
+                continue;
+            // 让道：执行中者优先不动；否则让 id 较小者不动，另一个挪开
+            int mover = ids[j];
+            bool aBusy = (a->getStatus() == RobotStatus::Busy);
+            bool bBusy = (b->getStatus() == RobotStatus::Busy);
+            if (aBusy != bBusy)
+                mover = bBusy ? ids[i] : ids[j];
+            if (nudged.contains(mover))
+                continue;
+            const Robot *m = m_robotManager->getRobot(mover);
+            if (!m)
+                continue;
+            // 沿垂直方向挪 0.5 格
+            float nx = m->getPx();
+            float ny = m->getPy();
+            for (int k = 0; k < 4; ++k)
+            {
+                // 用 a→b 向量做垂直偏移
+                float perpX = -dy / d;
+                float perpY = dx / d;
+                if (k >= 2)
+                {
+                    perpX = -perpX;
+                    perpY = -perpY;
+                }
+                float tx = m->getPx() + perpX * (1.0f);
+                float ty = m->getPy() + perpY * (1.0f);
+                if (tx >= 0 && ty >= 0 && tx < m_gridCols && ty < m_gridRows &&
+                    !isBlockedWorld(tx, ty))
+                {
+                    nx = tx;
+                    ny = ty;
+                    break;
+                }
+            }
+            if (std::abs(nx - m->getPx()) > 1e-3f || std::abs(ny - m->getPy()) > 1e-3f)
+            {
+                m_robotManager->updateRobotPosition(mover, nx, ny);
+                nudged.append(mover);
+            }
+        }
+    }
+    if (!nudged.isEmpty())
+        emit logMessage("[调度] 已解除 " + QString::number(nudged.size()) + " 处卡位", 1);
+}
+
 void RobotController::stepRobots()
 {
     if (!m_simTimer || !m_simTimer->isActive())
@@ -727,7 +895,6 @@ void RobotController::stepRobots()
     const float defaultSpeed = 8.0f;   // 无速度配置时的模拟速度(单位/秒)
     const float arriveAt = 0.5f;        // 视为到达某段目标的判定距离
 
-    bool allIdleHome = true;            // 用于清除一次性"全部回原点"标记
     const QList<int> ids = m_robotManager->getAllRobotIds();
     for (int id : ids)
     {
@@ -793,56 +960,19 @@ void RobotController::stepRobots()
         if (r->getStatus() != RobotStatus::Idle)
             continue; // 故障/离线等不移动
 
-        // —— 空闲：电量过低则去充电(转 Charging，本拍结束) ——
+        // —— 空闲机器人：低电则去充电；否则回最近充电桩停靠 ——
         if (goChargeIfLow(id))
             continue;
 
-        // 否则按开关/手动"全部回原点"回原点
-        const float px = r->getPx();
-        const float py = r->getPy();
-        const bool away = (std::abs(px) > 1e-3f || std::abs(py) > 1e-3f);
-        if (away)
-            allIdleHome = false; // 还有空闲机器人没到原点，先不清一次性标记
-
-        if (!m_isReturnHome && !m_homeIdleNow)
+        QPointF ch = nearestCharger(r->getPx(), r->getPy());
+        float dch = std::sqrt(std::pow(ch.x() - r->getPx(), 2) + std::pow(ch.y() - r->getPy(), 2));
+        if (dch > arriveAt)
         {
-            m_robotReturnStage[id] = 0;
-            continue;
+            const float speed = r->getSpeed() > 0.0f ? qMin(r->getSpeed(), m_maxRobotSpeed) : defaultSpeed;
+            stepToward(id, (float)ch.x(), (float)ch.y(), speed, dt); // 沿避障路径回桩
         }
-
-        // 回程阶段日志(避免每拍重复)
-        int &stage = m_robotReturnStage[id];
-        if (away && stage == 0)
-        {
-            stage = 1;
-            emit logMessage("[调度] 机器人 " + QString::number(id) +
-                                " 任务已结束，正在返回原点",
-                            1);
-        }
-
-        // 向原点格中心(0.5,0.5)移动(避障路径)
-        const float speed = r->getSpeed() > 0.0f ? qMin(r->getSpeed(), m_maxRobotSpeed) : defaultSpeed;
-        bool reached = !stepToward(id, 0.5f, 0.5f, speed, dt);
-        if (reached)
-        {
-            if (away)
-            {
-                if (stage == 1)
-                {
-                    stage = 2;
-                    emit logMessage("[调度] 机器人 " + QString::number(id) +
-                                        " 已回到原点",
-                                    1);
-                }
-            }
-            continue;
-        }
+        // 已到桩：保持空闲停靠(不移动)
     }
-
-    // 手动“全部回原点”只有在所有空闲机器人都不在原点之外时才清除，
-    // 避免只移动一步就被复位
-    if (m_homeIdleNow && allIdleHome)
-        m_homeIdleNow = false;
 }
 
 // ========== 数据持久化 ==========

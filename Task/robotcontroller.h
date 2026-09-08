@@ -37,12 +37,19 @@ public:
     int getFaultCount() const;
     bool isRobotBusy(int id) const;
     bool updateRobotIp(int id, const QString &ip);
+    // 生成一个"充电桩为圆心、圆内随机"的出生点(避障、不出界)
+    QPointF nextSpawnPos() const;
+    // 对头相撞卡住时，把占道/低优先级的一方横向让开一格，破除僵局
+    void resolveConflicts();
 
     // ========== 任务管理 ==========
     bool addTask(int taskId, int priority, float startX, float startY,
                  float endX, float endY, const QString &desc = "");
     bool addTask(const Task &task);
     bool removeTask(int taskId);
+    bool removeNewestTask(); // 删除最近创建的任务
+    void clearAllTasks();    // 清空全部任务
+    void removeAllRobots();  // 清空全部机器人(尽量释放)
     Task *getTask(int taskId);
     // 取消/回收：同时释放绑定的机器人
     bool cancelExecutingTask(int taskId);
@@ -70,6 +77,7 @@ public:
     // ========== 数据持久化(DataManager) ==========
     bool saveData(const QString &filePath = "");
     bool loadData(const QString &filePath = "");
+    bool loadRobotsOnly();   // 仅从数据文件载入机器人(不含任务/地图)
 
     // ========== 地图网格 / 可达性(为 A*、避障铺路) ==========
     void setMapGrid(int cols, int rows, const QVector<char> &obstacles); // 1格=1世界单位
@@ -159,6 +167,14 @@ private:
     int m_gridRows = 30;
     QVector<char> m_obstacles;               // 0 空闲 / 1 障碍
     int cellIndex(int cx, int cy) const { return cy * m_gridCols + cx; }
+    // 家的位置：放在画布中间某格子的中心(充电桩位于格内，不压网格线)
+    QPointF homePoint() const
+    {
+        return QPointF((int)(m_gridCols * 0.5f) + 0.5f,
+                       (int)(m_gridRows * 0.5f) + 0.5f);
+    }
+    // 该世界坐标是否落在某充电桩的格内(非本机器人目标桩则不可进入)
+    bool blockedByCharger(int robotId, float wx, float wy) const;
 };
 
 #endif // ROBOTCONTROLLER_H

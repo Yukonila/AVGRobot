@@ -20,16 +20,22 @@ QString UserManager::defaultPath()
 
 void UserManager::ensureDefaultAdmin()
 {
-    // 没有任何账号时内置一个管理员(用户名 admin)
-    if (m_users.isEmpty() && !m_users.contains("admin"))
+    // 确保唯一管理员 koni/123 存在
+    auto it = m_users.find("koni");
+    if (it == m_users.end())
     {
         UserAccount a;
-        a.username = "admin";
-        a.password = "admin123";
+        a.username = "koni";
+        a.password = "123";
         a.isAdmin = true;
-        m_users.insert("admin", a);
+        m_users.insert("koni", a);
         save();
-        emit logMessage("[账号] 已创建默认管理员 admin/admin123", 0);
+        emit logMessage("[账号] 已创建唯一管理员 koni/123", 0);
+    }
+    else if (!it->isAdmin)
+    {
+        it->isAdmin = true;
+        save();
     }
 }
 
@@ -57,7 +63,7 @@ bool UserManager::load(const QString &path)
                         UserAccount acc;
                         acc.username = u["username"].toString();
                         acc.password = u["password"].toString();
-                        acc.isAdmin = u["role"].toString() == "admin";
+                        acc.isAdmin = (u["role"].toString() == "admin") || acc.username == "koni";
                         if (!acc.username.isEmpty())
                             m_users.insert(acc.username, acc);
                     }
@@ -99,8 +105,8 @@ bool UserManager::addUser(const QString &user, const QString &pass, bool forceAd
     UserAccount acc;
     acc.username = u;
     acc.password = pass;
-    // 第一个账号(或强制)为管理员
-    acc.isAdmin = forceAdmin || m_users.isEmpty();
+    // 注册的账号默认为普通用户；管理员只有内置的 koni(或强制指定)
+    acc.isAdmin = forceAdmin;
     m_users.insert(u, acc);
     save();
     return true;
@@ -121,6 +127,8 @@ bool UserManager::removeUser(const QString &user)
 {
     if (user.trimmed().isEmpty())
         return false;
+    if (user.trimmed() == "koni")
+        return false; // 唯一管理员 koni 不可删除
     auto it = m_users.find(user);
     if (it == m_users.end())
         return false;
