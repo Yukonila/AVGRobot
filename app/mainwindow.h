@@ -4,8 +4,8 @@
 #include <QMainWindow>
 #include <QTableWidgetItem>
 #include "Task/robotcontroller.h"
-#include "mapwidget.h"
-#include "mapeditor.h"
+#include "view/mapeditor.h"
+#include "tcpRobotServer.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui
@@ -19,7 +19,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr, bool simulate = true);
+    MainWindow(QWidget *parent = nullptr, bool simulate = true, bool isAdmin = true);
     ~MainWindow();
 
 private slots:
@@ -28,6 +28,7 @@ private slots:
     void onBtnEditRobotClicked();
     void onBtnDeleteRobotClicked();
     void onBtnRefreshClicked();
+    void onUserManagement(); // 管理员：账号管理(改角色/改密码/增删)
 
     // 任务按钮槽
     void onBtnAddTaskClicked();
@@ -66,8 +67,10 @@ private:
 
     Ui::MainWindow *ui;
     RobotController *m_controller;
-    RobotMapWidget *m_map;
     MapEditorWidget *m_mapEditor;
+    bool m_isAdmin;
+    bool m_simulate;
+    TcpRobotServer *m_tcpServer; // TCP 接入模式下的服务端
     int m_nextRobotId = 10001; // 新建机器人ID从10001开始自增
     int m_nextTaskId = 1;      // 新建任务ID从1开始自增
 };

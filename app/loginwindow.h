@@ -2,10 +2,12 @@
 #define LOGINWINDOW_H
 
 #include <QDialog>
+#include "usermanager.h"
 
 class QLineEdit;
 class QPushButton;
 class QComboBox;
+class QLabel;
 class MainWindow;
 
 class LoginWindow : public QDialog
@@ -18,19 +20,25 @@ public:
 
 private slots:
     void onLoginClicked();
+    void onRegisterClicked();
     void onCancelClicked();
     void onMainLogout();
 
 private:
     void openMainWindow();
-    bool checkAccount(const QString &user, const QString &pass) const;
+    void showStatus(const QString &s, bool ok);
 
     QLineEdit *m_userEdit;
     QLineEdit *m_passEdit;
+    QLineEdit *m_pass2Edit; // 注册确认密码
     QPushButton *m_btnLogin;
+    QPushButton *m_btnRegister;
     QPushButton *m_btnCancel;
-    QComboBox *m_modeCombo;   // 运行模式: 0=模拟机器人, 1=TCP接入真实机器人
+    QComboBox *m_modeCombo; // 运行模式
+    QLabel *m_hint;
 
+    UserManager m_users;
+    bool m_isAdmin;
     MainWindow *m_mainWindow;
 };
 

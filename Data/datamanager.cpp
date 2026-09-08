@@ -221,6 +221,9 @@ QJsonObject DataManager::toJsonObject(const Robot &robot) const
     obj["y"] = robot.getPy();
     obj["battery"] = robot.getBattery();
     obj["speed"] = robot.getSpeed();
+    obj["accel"] = robot.getAccel();
+    obj["maxLoad"] = robot.getMaxLoad();
+    obj["load"] = robot.getLoad();
     obj["status"] = static_cast<int>(robot.getStatus());
     obj["taskId"] = robot.getTask();
     obj["ip"] = robot.getIp();
@@ -235,6 +238,9 @@ Robot DataManager::toRobot(const QJsonObject &json) const
     robot.setPy(json.value("y").toDouble());
     robot.setBattery(json.value("battery").toInt(100));
     robot.setSpeed(json.value("speed").toDouble(0.0));
+    robot.setAccel(json.value("accel").toDouble(1.5));
+    robot.setMaxLoad(json.value("maxLoad").toInt(500));
+    robot.setLoad(json.value("load").toDouble(0.0));
     robot.setStatus(static_cast<RobotStatus>(json.value("status").toInt(0)));
     robot.setTask(json.value("taskId").toInt(-1));
     robot.setIp(json.value("ip").toString(""));

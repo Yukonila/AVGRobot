@@ -1,10 +1,11 @@
 #include "robotcontroller.h"
 #include "Data/datamanager.h"
 #include <QDebug>
+#include <QPoint>
 #include <cmath>
 
 RobotController::RobotController(QObject *parent)
-    : QObject(parent), m_robotManager(new RobotManager(this)), m_taskManager(new TaskManager(this)), m_scheduler(nullptr), m_simTimer(nullptr), m_simIntervalMs(250), m_isReturnHome(true), m_homeIdleNow(false), m_simulateMovement(true)
+    : QObject(parent), m_robotManager(new RobotManager(this)), m_taskManager(new TaskManager(this)), m_scheduler(nullptr), m_simTimer(nullptr), m_simIntervalMs(250), m_isReturnHome(true), m_homeIdleNow(false), m_simulateMovement(true), m_maxRobotSpeed(12.0f), m_lowChargeLevel(30.0f), m_chargePerSec(8.0f), m_drainPerUnit(0.22f)
 {
     // ========== 连接 RobotManager 信号 ==========
     connect(m_robotManager, &RobotManager::logMessage,
@@ -51,6 +52,9 @@ RobotController::RobotController(QObject *parent)
     connect(m_simTimer, &QTimer::timeout, this, [this]()
             { stepRobots(); });
 
+    // 默认充电桩 = 原点
+    addDefaultCharger();
+
     emit logMessage("[RobotController] 初始化完成", 0);
 }
 
@@ -86,7 +90,29 @@ bool RobotController::updateBattery(int id, int battery)
 
 bool RobotController::updateSpeed(int id, float speed)
 {
+    if (speed < 0.0f)
+        speed = 0.0f;
+    if (speed > m_maxRobotSpeed)
+        speed = m_maxRobotSpeed; // 速度上限
     return m_robotManager->updateRobotSpeed(id, speed);
+}
+
+bool RobotController::updateRobotAccel(int id, float accel)
+{
+    Robot *r = m_robotManager->getRobot(id);
+    if (!r)
+        return false;
+    r->setAccel(accel);
+    return true;
+}
+
+bool RobotController::updateRobotMaxLoad(int id, int maxLoad)
+{
+    Robot *r = m_robotManager->getRobot(id);
+    if (!r)
+        return false;
+    r->setMaxLoad(maxLoad);
+    return true;
 }
 
 bool RobotController::updateStatus(int id, RobotStatus status)
@@ -161,6 +187,30 @@ bool RobotController::removeTask(int taskId)
 Task *RobotController::getTask(int taskId)
 {
     return m_taskManager->getTask(taskId);
+}
+
+bool RobotController::cancelExecutingTask(int taskId)
+{
+    Task *t = m_taskManager->getTask(taskId);
+    if (!t)
+        return false;
+    int rid = t->getAssignedRobotId();
+    if (rid >= 0 && m_robotManager->getRobot(rid))
+        m_robotManager->finishRobotTask(rid); // 释放机器人
+    return m_taskManager->cancelTask(taskId);
+}
+
+bool RobotController::recycleTask(int taskId)
+{
+    Task *t = m_taskManager->getTask(taskId);
+    if (!t)
+        return false;
+    if (t->isFinished())
+        return false;
+    int rid = t->getAssignedRobotId();
+    if (rid >= 0 && m_robotManager->getRobot(rid))
+        m_robotManager->finishRobotTask(rid); // 释放机器人
+    return m_taskManager->reassignTask(taskId); // 放回待分配队列
 }
 
 QList<int> RobotController::getAllTaskIds() const
@@ -295,7 +345,376 @@ bool RobotController::isSimulationMode() const
     return m_simulateMovement;
 }
 
+// ========== 地图网格 / 可达性 ==========
+
+void RobotController::setMapGrid(int cols, int rows, const QVector<char> &obstacles)
+{
+    m_gridCols = qMax(1, cols);
+    m_gridRows = qMax(1, rows);
+    m_obstacles = obstacles;
+    if (m_obstacles.size() < m_gridCols * m_gridRows)
+        m_obstacles.fill(0, m_gridCols * m_gridRows);
+}
+
+bool RobotController::isBlockedWorld(float x, float y) const
+{
+    int cx = (int)std::floor(x);
+    int cy = (int)std::floor(y);
+    if (cx < 0 || cy < 0 || cx >= m_gridCols || cy >= m_gridRows)
+        return true; // 界外视为不可行
+    return m_obstacles.value(cellIndex(cx, cy), 1) == 1;
+}
+
+bool RobotController::isReachable(float ax, float ay, float bx, float by) const
+{
+    // 世界坐标→格子
+    auto toCell = [](float w) -> int { return (int)std::floor(w); };
+    int sx = toCell(ax), sy = toCell(ay);
+    int gx = toCell(bx), gy = toCell(by);
+
+    auto inBounds = [&](int x, int y)
+    { return x >= 0 && y >= 0 && x < m_gridCols && y < m_gridRows; };
+
+    if (!inBounds(sx, sy) || !inBounds(gx, gy))
+        return false;
+    if (m_obstacles.value(cellIndex(sx, sy), 1) == 1 || m_obstacles.value(cellIndex(gx, gy), 1) == 1)
+        return false;
+    if (sx == gx && sy == gy)
+        return true;
+
+    // BFS 4 邻域连通性
+    QVector<int> dist(m_gridCols * m_gridRows, -1);
+    QVector<QPoint> que;
+    dist[cellIndex(sx, sy)] = 0;
+    que.append(QPoint(sx, sy));
+    const int dx[4] = {1, -1, 0, 0};
+    const int dy[4] = {0, 0, 1, -1};
+    int head = 0;
+    while (head < que.size())
+    {
+        QPoint cur = que[head++];
+        if (cur.x() == gx && cur.y() == gy)
+            return true;
+        for (int k = 0; k < 4; ++k)
+        {
+            int nx = cur.x() + dx[k];
+            int ny = cur.y() + dy[k];
+            if (!inBounds(nx, ny))
+                continue;
+            if (m_obstacles.value(cellIndex(nx, ny), 1) == 1)
+                continue;
+            if (dist[cellIndex(nx, ny)] >= 0)
+                continue;
+            dist[cellIndex(nx, ny)] = dist[cellIndex(cur.x(), cur.y())] + 1;
+            que.append(QPoint(nx, ny));
+        }
+    }
+    return false;
+}
+
+QList<QPointF> RobotController::planPathWorld(float ax, float ay, float bx, float by) const
+{
+    QList<QPointF> out;
+    auto toCell = [](float w) -> int { return (int)std::floor(w); };
+    int sx = toCell(ax), sy = toCell(ay);
+    int gx = toCell(bx), gy = toCell(by);
+    auto inBounds = [&](int x, int y)
+    { return x >= 0 && y >= 0 && x < m_gridCols && y < m_gridRows; };
+
+    if (!inBounds(sx, sy) || !inBounds(gx, gy))
+        return out;
+    if (m_obstacles.value(cellIndex(sx, sy), 1) == 1 || m_obstacles.value(cellIndex(gx, gy), 1) == 1)
+        return out;
+    if (sx == gx && sy == gy)
+    {
+        out.append(QPointF(sx + 0.5f, sy + 0.5f));
+        return out;
+    }
+
+    // BFS + 前驱回溯（4 邻域）
+    QVector<int> pxv(m_gridCols * m_gridRows, -1), pyv(m_gridCols * m_gridRows, -1);
+    QVector<char> vis(m_gridCols * m_gridRows, 0);
+    const int dx[4] = {1, -1, 0, 0};
+    const int dy[4] = {0, 0, 1, -1};
+    QList<QPoint> que;
+    int head = 0;
+    vis[cellIndex(sx, sy)] = 1;
+    que.append(QPoint(sx, sy));
+    bool found = false;
+    while (head < que.size() && !found)
+    {
+        QPoint cur = que[head++];
+        for (int k = 0; k < 4 && !found; ++k)
+        {
+            int nx = cur.x() + dx[k];
+            int ny = cur.y() + dy[k];
+            if (!inBounds(nx, ny))
+                continue;
+            if (m_obstacles.value(cellIndex(nx, ny), 1) == 1)
+                continue;
+            int nidx = cellIndex(nx, ny);
+            if (vis[nidx])
+                continue;
+            vis[nidx] = 1;
+            pxv[nidx] = cur.x();
+            pyv[nidx] = cur.y();
+            if (nx == gx && ny == gy)
+            {
+                found = true;
+                break;
+            }
+            que.append(QPoint(nx, ny));
+        }
+    }
+    if (!found)
+        return out;
+
+    // 回溯路径(不含起点，含终点)，再反向
+    QList<QPoint> rev;
+    int cx = gx, cy = gy;
+    while (cx != sx || cy != sy)
+    {
+        rev.prepend(QPoint(cx, cy));
+        int pxx = pxv[cellIndex(cx, cy)];
+        int pyy = pyv[cellIndex(cx, cy)];
+        cx = pxx;
+        cy = pyy;
+    }
+    out.append(QPointF(sx + 0.5f, sy + 0.5f)); // 起点中心
+    for (const QPoint &p : rev)
+        out.append(QPointF(p.x() + 0.5f, p.y() + 0.5f));
+    return out;
+}
+
+// ========== 电量 / 充电桩(模拟) ==========
+
+float RobotController::maxSpeed() const { return m_maxRobotSpeed; }
+float RobotController::lowChargeLevel() const { return m_lowChargeLevel; }
+
+QList<QPointF> RobotController::chargers() const { return m_chargers; }
+
+void RobotController::addCharger(float x, float y)
+{
+    m_chargers.append(QPointF(x, y));
+    emit logMessage("[充电桩] 新增充电桩 @(" + QString::number(x, 'f', 1) + "," +
+                        QString::number(y, 'f', 1) + ")",
+                    0);
+}
+
+void RobotController::clearChargers()
+{
+    m_chargers.clear();
+    m_chargeTarget.clear();
+}
+
+void RobotController::addDefaultCharger()
+{
+    if (m_chargers.isEmpty())
+        m_chargers.append(QPointF(0.5f, 0.5f)); // 原点所在格中心
+}
+
+QPointF RobotController::nearestCharger(float x, float y) const
+{
+    if (m_chargers.isEmpty())
+        return QPointF(0.5f, 0.5f);
+    QPointF best = m_chargers.first();
+    float bestD = 1e30f;
+    for (const QPointF &c : m_chargers)
+    {
+        float d = std::sqrt((c.x() - x) * (c.x() - x) + (c.y() - y) * (c.y() - y));
+        if (d < bestD)
+        {
+            bestD = d;
+            best = c;
+        }
+    }
+    return best;
+}
+
+// 移动后按距离与速度掉电
+void RobotController::drainBattery(int robotId, float distance, float speed)
+{
+    Robot *r = m_robotManager->getRobot(robotId);
+    if (!r || distance <= 0.0f)
+        return;
+    int batt = r->getBattery();
+    if (batt <= 0)
+        return;
+    float ratio = m_maxRobotSpeed > 0.0f ? qMin(speed / m_maxRobotSpeed, 1.0f) : 0.5f;
+    // 更快 → 单位距离掉电更多
+    float drop = distance * m_drainPerUnit * (0.5f + 0.5f * ratio);
+    int nb = qMax(0, qRound((float)batt - drop));
+    if (nb != batt)
+    {
+        r->setBattery(nb);
+        emit robotBatteryChanged(robotId, nb);
+    }
+}
+
+// 空闲且电量低于阈值 → 转入充电状态，返回 true
+bool RobotController::goChargeIfLow(int robotId)
+{
+    Robot *r = m_robotManager->getRobot(robotId);
+    if (!r || r->getStatus() != RobotStatus::Idle)
+        return false;
+    if (r->getBattery() > (int)m_lowChargeLevel)
+        return false;
+
+    QPointF target = nearestCharger(r->getPx(), r->getPy());
+    m_chargeTarget[robotId] = target;
+    m_robotManager->updateRobotStatus(robotId, RobotStatus::Charging); // 置充电，调度不再分配
+    emit logMessage("[充电] 机器人 " + QString::number(robotId) +
+                        " 电量 " + QString::number(r->getBattery()) +
+                        "% 过低，前往充电桩(" + QString::number(target.x(), 'f', 1) + "," +
+                        QString::number(target.y(), 'f', 1) + ") 充电",
+                    3);
+    return true;
+}
+
 // ========== 移动模拟（让任务能演示完成） ==========
+
+// 执行中的机器人：沿避障网格路径走(先到任务起点再绕行到终点)，被其它机器人挡住则等待
+void RobotController::stepBusyRobot(int id, Robot *r, float dt)
+{
+    const float defaultSpeed = 8.0f;
+    const float arriveTh = 0.35f;
+
+    m_robotReturnStage[id] = 0;
+    m_robotTaskPhase.remove(id);
+    m_robotStartDone.remove(id);
+
+    const int taskId = r->getTask();
+    if (taskId < 0)
+        return;
+    const Task *task = m_taskManager->getTask(taskId);
+    if (!task)
+        return;
+
+    // 若任务变化(或未规划)，重算路径：当前格子→任务起点→任务终点
+    if (m_robotPlanTask.value(id) != taskId || !m_robotPlan.contains(id))
+    {
+        QPointF cur(r->getPx(), r->getPy());
+        QPointF st(task->getStartX(), task->getStartY());
+        QPointF en(task->getEndX(), task->getEndY());
+        QList<QPointF> p1 = planPathWorld((float)cur.x(), (float)cur.y(),
+                                          (float)st.x(), (float)st.y());
+        QList<QPointF> p2 = planPathWorld((float)st.x(), (float)st.y(),
+                                          (float)en.x(), (float)en.y());
+        QList<QPointF> plan;
+        for (const QPointF &pt : p1)
+        {
+            if (plan.isEmpty() || plan.last() != pt)
+                plan.append(pt);
+        }
+        // 拼接(跳过重复的起点格)
+        for (int i = 0; i < p2.size(); ++i)
+        {
+            if (i == 0 && !plan.isEmpty() && plan.last() == p2[i])
+                continue;
+            plan.append(p2[i]);
+        }
+        m_robotPlan[id] = plan;
+        m_robotPlanTask[id] = taskId;
+        m_robotPlanIdx[id] = 0;
+        if (!plan.isEmpty())
+            emit logMessage("[调度] 机器人 " + QString::number(id) +
+                                " 沿避障路径前往任务 " + QString::number(taskId),
+                            1);
+    }
+
+    QList<QPointF> &plan = m_robotPlan[id];
+    if (plan.isEmpty())
+        return; // 不可达(应在创建任务时被拦截)；原地等待
+
+    int &idx = m_robotPlanIdx[id];
+    const float speed = r->getSpeed() > 0.0f ? qMin(r->getSpeed(), m_maxRobotSpeed) : defaultSpeed;
+    const float step = speed * dt;
+
+    // 跳过已到达的路径点
+    while (idx < plan.size())
+    {
+        QPointF w = plan[idx];
+        float dx = w.x() - r->getPx();
+        float dy = w.y() - r->getPy();
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (dist < arriveTh)
+        {
+            ++idx;
+            continue;
+        }
+
+        float move = step > dist ? dist : step;
+        float nx = r->getPx() + dx / dist * move;
+        float ny = r->getPy() + dy / dist * move;
+        if (robotProximityBlocked(id, nx, ny))
+            return; // 前方/附近有其它机器人 → 等待
+        m_robotManager->updateRobotPosition(id, nx, ny);
+        drainBattery(id, move, speed);
+        return;
+    }
+}
+
+// 沿避障网格路径向目标(世界坐标)走一步；途中返回 true，已到目标返回 false
+bool RobotController::stepToward(int id, float tx, float ty, float speed, float dt)
+{
+    Robot *r = m_robotManager->getRobot(id);
+    if (!r)
+        return false;
+    const float arriveTh = 0.35f;
+    float dist0 = std::sqrt((tx - r->getPx()) * (tx - r->getPx()) + (ty - r->getPy()) * (ty - r->getPy()));
+    if (dist0 < arriveTh)
+        return false;
+
+    QList<QPointF> path = planPathWorld(r->getPx(), r->getPy(), tx, ty);
+    if (path.isEmpty())
+        return true; // 暂时无法到达，原地等待
+
+    // 下一个路径点(从自身格到下一格中心)；同格则直接朝目标
+    QPointF target = path.last();
+    for (int i = 1; i < path.size(); ++i)
+    {
+        float d = std::sqrt(std::pow(path[i].x() - r->getPx(), 2) +
+                            std::pow(path[i].y() - r->getPy(), 2));
+        if (d > arriveTh)
+        {
+            target = path[i];
+            break;
+        }
+    }
+
+    float dx = target.x() - r->getPx();
+    float dy = target.y() - r->getPy();
+    float dist = std::sqrt(dx * dx + dy * dy);
+    if (dist < 1e-3f)
+        return true;
+    const float step = speed * dt;
+    const float move = step > dist ? dist : step;
+    float nx = r->getPx() + dx / dist * move;
+    float ny = r->getPy() + dy / dist * move;
+    if (robotProximityBlocked(id, nx, ny))
+        return true; // 被其它机器人占道 → 等待
+    m_robotManager->updateRobotPosition(id, nx, ny);
+    return true;
+}
+
+// 距其它机器人太近(约一格)则视为被占道，返回 true
+bool RobotController::robotProximityBlocked(int id, float nx, float ny) const
+{
+    const float minDist = 0.8f;
+    for (int oid : m_robotManager->getAllRobotIds())
+    {
+        if (oid == id)
+            continue;
+        const Robot *o = m_robotManager->getRobot(oid);
+        if (!o)
+            continue;
+        float dx = o->getPx() - nx;
+        float dy = o->getPy() - ny;
+        if (std::sqrt(dx * dx + dy * dy) < minDist)
+            return true;
+    }
+    return false;
+}
 
 void RobotController::stepRobots()
 {
@@ -316,89 +735,69 @@ void RobotController::stepRobots()
         if (!r)
             continue;
 
-        // 非执行状态的机器人，清掉"起点/终点"相位记录(便于下次重新从起点走)
+        // 非执行状态的机器人，清掉"起点/终点"相位记录与避障路径(便于下次重新规划)
         if (r->getStatus() != RobotStatus::Busy)
         {
             m_robotTaskPhase.remove(id);
             m_robotStartDone.remove(id);
+            m_robotPlan.remove(id);
+            m_robotPlanTask.remove(id);
+            m_robotPlanIdx.remove(id);
         }
 
         if (r->getStatus() == RobotStatus::Busy)
         {
-            // 执行期间复位"回程日志"标记，便于完成后再回原点时重新打印
-            m_robotReturnStage[id] = 0;
+            stepBusyRobot(id, r, dt); // 沿避障路径走向任务终点
+            continue;
+        }
 
-            // —— 执行任务：先到任务起点，再到任务终点(到过起点后锁定终点) ——
-            const int taskId = r->getTask();
-            if (taskId < 0)
-                continue;
-            const Task *task = m_taskManager->getTask(taskId);
-            if (!task)
-                continue;
-
-            // 换任务时重置"是否已到起点"标记，并打印"前往起点"
-            if (m_robotTaskPhase.value(id) != taskId)
-            {
-                m_robotTaskPhase[id] = taskId;
-                m_robotStartDone[id] = false;
-                emit logMessage("[调度] 机器人 " + QString::number(id) +
-                                    " 前往任务 " + QString::number(taskId) +
-                                    " 起点(" + QString::number(task->getStartX(), 'f', 1) + "," +
-                                    QString::number(task->getStartY(), 'f', 1) + ")",
-                                1);
-            }
-
-            float tx, ty;
-            if (!m_robotStartDone.value(id))
-            {
-                float dStart = std::sqrt(std::pow(r->getPx() - task->getStartX(), 2) +
-                                         std::pow(r->getPy() - task->getStartY(), 2));
-                if (dStart <= arriveAt)
-                {
-                    m_robotStartDone[id] = true; // 到过起点，锁定去终点
-                    emit logMessage("[调度] 机器人 " + QString::number(id) +
-                                        " 已到任务 " + QString::number(taskId) +
-                                        " 起点，正在前往终点(" +
-                                        QString::number(task->getEndX(), 'f', 1) + "," +
-                                        QString::number(task->getEndY(), 'f', 1) + ")",
-                                    1);
-                }
-                else
-                {
-                    tx = task->getStartX();
-                    ty = task->getStartY();
-                }
-            }
-
-            if (m_robotStartDone.value(id))
-            {
-                tx = task->getEndX();
-                ty = task->getEndY();
-            }
-
+        if (r->getStatus() == RobotStatus::Charging)
+        {
+            // —— 充电中：先沿避障路径到充电桩，到桩后充电 ——
             const float px = r->getPx();
             const float py = r->getPy();
-            const float dx = tx - px;
-            const float dy = ty - py;
-            const float dist = std::sqrt(dx * dx + dy * dy);
-            if (dist < arriveAt)
+            if (!m_chargeTarget.contains(id))
+                m_chargeTarget[id] = nearestCharger(px, py);
+            QPointF tg = m_chargeTarget.value(id);
+            const float dist = std::sqrt(std::pow(tg.x() - px, 2) + std::pow(tg.y() - py, 2));
+            if (dist > arriveAt)
             {
-                if (!m_robotStartDone.value(id) && std::abs(dx) < 1e-3f && std::abs(dy) < 1e-3f)
-                    continue; // 尚在起点等待
-                continue;     // 已在终点附近，等调度器判定完成
+                const float speed = r->getSpeed() > 0.0f ? r->getSpeed() : defaultSpeed;
+                stepToward(id, (float)tg.x(), (float)tg.y(), speed, dt);
             }
-
-            const float speed = r->getSpeed() > 0.0f ? r->getSpeed() : defaultSpeed;
-            const float step = speed * dt;
-            const float move = step > dist ? dist : step;
-            m_robotManager->updateRobotPosition(id, px + dx / dist * move, py + dy / dist * move);
+            else
+            {
+                // 在充电桩，开始充电
+                int batt = r->getBattery();
+                int nb = qMin(100, batt + qRound(m_chargePerSec * dt));
+                if (nb != batt)
+                {
+                    r->setBattery(nb);
+                    emit robotBatteryChanged(id, nb);
+                }
+                // 充满 或 (≥80% 且有等待分配的任务) → 恢复可工作
+                bool full = batt >= 100;
+                bool enough = (m_taskManager->getPendingCount() > 0 && batt >= 80);
+                if (full || enough)
+                {
+                    m_robotManager->updateRobotStatus(id, RobotStatus::Idle);
+                    m_chargeTarget.remove(id);
+                    emit logMessage("[充电] 机器人 " + QString::number(id) +
+                                        (full ? " 已充满，恢复空闲" : " 已充至 80% 以上，有任务待分配，恢复空闲"),
+                                    1);
+                }
+            }
             continue;
         }
 
         if (r->getStatus() != RobotStatus::Idle)
-            continue; // 故障/离线/充电等不移动
+            continue; // 故障/离线等不移动
 
-        // —— 空闲机器人：可能回原点(自动开关 或 手动“全部回原点”) ——
+        // —— 空闲：电量过低则去充电(转 Charging，本拍结束) ——
+        if (goChargeIfLow(id))
+            continue;
+
+        // 否则按开关/手动"全部回原点"回原点
         const float px = r->getPx();
         const float py = r->getPy();
         const bool away = (std::abs(px) > 1e-3f || std::abs(py) > 1e-3f);
@@ -407,8 +806,8 @@ void RobotController::stepRobots()
 
         if (!m_isReturnHome && !m_homeIdleNow)
         {
-            m_robotReturnStage[id] = 0; // 不在回程，复位标记
-            continue;                   // 既不自动回、也没手动触发 → 停在原地
+            m_robotReturnStage[id] = 0;
+            continue;
         }
 
         // 回程阶段日志(避免每拍重复)
@@ -421,15 +820,13 @@ void RobotController::stepRobots()
                             1);
         }
 
-        // 向原点(0,0)移动
-        const float dx = 0.0f - px;
-        const float dy = 0.0f - py;
-        const float dist = std::sqrt(dx * dx + dy * dy);
-        if (dist < arriveAt)
+        // 向原点格中心(0.5,0.5)移动(避障路径)
+        const float speed = r->getSpeed() > 0.0f ? qMin(r->getSpeed(), m_maxRobotSpeed) : defaultSpeed;
+        bool reached = !stepToward(id, 0.5f, 0.5f, speed, dt);
+        if (reached)
         {
             if (away)
             {
-                m_robotManager->updateRobotPosition(id, 0.0f, 0.0f);
                 if (stage == 1)
                 {
                     stage = 2;
@@ -440,11 +837,6 @@ void RobotController::stepRobots()
             }
             continue;
         }
-
-        const float speed = r->getSpeed() > 0.0f ? r->getSpeed() : defaultSpeed;
-        const float step = speed * dt;
-        const float move = step > dist ? dist : step;
-        m_robotManager->updateRobotPosition(id, px + dx / dist * move, py + dy / dist * move);
     }
 
     // 手动“全部回原点”只有在所有空闲机器人都不在原点之外时才清除，

@@ -37,12 +37,14 @@ void RobotDialog::setupUI()
         ui->editY->setText("0.0");
         ui->editBattery->setText("100");
         ui->editSpeed->setText("5.0");
+        ui->editAccel->setText("1.5");
+        ui->editMaxLoad->setText("500");
     }
 
     adjustSize();
 }
 
-void RobotDialog::setEditData(int id, const QString &ip, float x, float y, int battery, float speed)
+void RobotDialog::setEditData(int id, const QString &ip, float x, float y, int battery, float speed, float accel, int maxLoad)
 {
     ui->editRobotId->setText(QString::number(id));
     ui->editIp->setText(ip);
@@ -50,6 +52,8 @@ void RobotDialog::setEditData(int id, const QString &ip, float x, float y, int b
     ui->editY->setText(QString::number(y, 'f', 1));
     ui->editBattery->setText(QString::number(battery));
     ui->editSpeed->setText(QString::number(speed, 'f', 1));
+    ui->editAccel->setText(QString::number(accel, 'f', 1));
+    ui->editMaxLoad->setText(QString::number(maxLoad));
 }
 
 int RobotDialog::getRobotId() const
@@ -80,6 +84,16 @@ int RobotDialog::getBattery() const
 float RobotDialog::getSpeed() const
 {
     return ui->editSpeed->text().toFloat();
+}
+
+float RobotDialog::getAccel() const
+{
+    return ui->editAccel->text().toFloat();
+}
+
+int RobotDialog::getMaxLoad() const
+{
+    return ui->editMaxLoad->text().toInt();
 }
 
 void RobotDialog::onBtnOkClicked()

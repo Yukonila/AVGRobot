@@ -4,6 +4,9 @@
 #include <QObject>
 #include <QTimer>
 #include <QHash>
+#include <QList>
+#include <QPointF>
+#include <QVector>
 #include "robotmanager.h"
 #include "taskmanager.h"
 #include "taskscheduler.h"
@@ -22,6 +25,8 @@ public:
     bool updatePosition(int id, float x, float y);
     bool updateBattery(int id, int battery);
     bool updateSpeed(int id, float speed);
+    bool updateRobotAccel(int id, float accel);
+    bool updateRobotMaxLoad(int id, int maxLoad);
     bool updateStatus(int id, RobotStatus status);
     const Robot *getRobot(int id) const;
     Robot *getRobot(int id);
@@ -39,6 +44,9 @@ public:
     bool addTask(const Task &task);
     bool removeTask(int taskId);
     Task *getTask(int taskId);
+    // 取消/回收：同时释放绑定的机器人
+    bool cancelExecutingTask(int taskId);
+    bool recycleTask(int taskId);
     QList<int> getAllTaskIds() const;
     QList<int> getPendingTaskIds() const;
     QList<int> getExecutingTaskIds() const;
@@ -62,6 +70,23 @@ public:
     // ========== 数据持久化(DataManager) ==========
     bool saveData(const QString &filePath = "");
     bool loadData(const QString &filePath = "");
+
+    // ========== 地图网格 / 可达性(为 A*、避障铺路) ==========
+    void setMapGrid(int cols, int rows, const QVector<char> &obstacles); // 1格=1世界单位
+    bool isBlockedWorld(float x, float y) const;
+    // 判断两个世界点(格子中心)是否可达(避开障碍的连通性)
+    bool isReachable(float ax, float ay, float bx, float by) const;
+    // 返回两点间的网格路径(世界坐标、格子中心)，空=不可达；用于避障路径规划/绘制
+    QList<QPointF> planPathWorld(float ax, float ay, float bx, float by) const;
+
+    // ========== 电量 / 充电桩 (模拟) ==========
+    float maxSpeed() const;          // 机器人速度上限
+    float lowChargeLevel() const;    // 低于该电量去充电(%)
+    QList<QPointF> chargers() const; // 充电桩列表
+    void addCharger(float x, float y);
+    QPointF nearestCharger(float x, float y) const;
+    void clearChargers();
+    void addDefaultCharger();        // 恢复默认原点充电桩
 
     // ========== 调试 ==========
     QString printAllRobots() const;
@@ -99,6 +124,9 @@ private:
     // 移动模拟（调度运行期间，让机器人逐段移动：任务起点→任务终点→回原点）
     QTimer *m_simTimer;
     void stepRobots(); // 每拍推进机器人位置
+    void stepBusyRobot(int id, Robot *r, float dt); // 执行中：沿避障路径走
+    bool stepToward(int id, float tx, float ty, float speed, float dt); // 沿避障路径向目标走一步(仍在途中=真)
+    bool robotProximityBlocked(int id, float nx, float ny) const; // 距其它机器人太近则停
     int m_simIntervalMs;
     bool m_isReturnHome;    // 自动回原点开关(默认开)
     bool m_homeIdleNow;     // “全部回原点”一次性触发标记
@@ -108,8 +136,29 @@ private:
     QHash<int, int> m_robotTaskPhase;   // robotId -> taskId
     QHash<int, bool> m_robotStartDone;  // robotId -> 已到过起点
 
+    // 执行中机器人的避障路径(格子中心世界坐标)
+    QHash<int, QList<QPointF>> m_robotPlan;  // robotId -> 路径
+    QHash<int, int> m_robotPlanTask;         // robotId -> 该路径对应的 taskId
+    QHash<int, int> m_robotPlanIdx;          // robotId -> 当前走到第几个点
+
     // 回原点阶段日志标记：0=未提示,1=已提示返回中,2=已提示回到
     QHash<int, int> m_robotReturnStage;
+
+    // 电量/充电
+    QList<QPointF> m_chargers;               // 充电桩位置(默认含原点)
+    QHash<int, QPointF> m_chargeTarget;      // robotId -> 目标充电桩
+    float m_maxRobotSpeed;
+    float m_lowChargeLevel;                  // 去充电的电量阈值
+    float m_chargePerSec;                    // 充电速度(电量%/秒)
+    float m_drainPerUnit;                    // 每单位距离掉电系数
+    void drainBattery(int robotId, float distance, float speed);
+    bool goChargeIfLow(int robotId);         // 低电空闲→去充电，返回是否转入充电
+
+    // 地图网格(避障/可达性)
+    int m_gridCols = 50;
+    int m_gridRows = 30;
+    QVector<char> m_obstacles;               // 0 空闲 / 1 障碍
+    int cellIndex(int cx, int cy) const { return cy * m_gridCols + cx; }
 };
 
 #endif // ROBOTCONTROLLER_H

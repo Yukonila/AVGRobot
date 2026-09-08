@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>380</width>
-    <height>280</height>
+    <height>300</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -75,6 +75,26 @@
      </item>
      <item row="5" column="1">
       <widget class="QLineEdit" name="editSpeed"/>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="labelAccel">
+       <property name="text">
+        <string>加速度:</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="QLineEdit" name="editAccel"/>
+     </item>
+     <item row="7" column="0">
+      <widget class="QLabel" name="labelMaxLoad">
+       <property name="text">
+        <string>最大负载(kg):</string>
+       </property>
+      </widget>
+     </item>
+     <item row="7" column="1">
+      <widget class="QLineEdit" name="editMaxLoad"/>
      </item>
     </layout>
    </item>

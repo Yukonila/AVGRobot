@@ -1,7 +1,7 @@
 #include "robot.h"
 
 Robot::Robot()
-    : r_id(0), r_x(0.0f), r_y(0.0f), r_battery(100), r_status(RobotStatus::Idle), r_curspeed(0.0f), r_curTaskId(-1), r_errorMsg(""), r_ip(""), r_creatTime(QDateTime::currentDateTime())
+    : r_id(0), r_x(0.0f), r_y(0.0f), r_battery(100), r_status(RobotStatus::Idle), r_curspeed(0.0f), r_accel(1.5f), r_maxLoad(500), r_load(0.0f), r_curTaskId(-1), r_errorMsg(""), r_ip(""), r_creatTime(QDateTime::currentDateTime())
 {
 }
 
@@ -93,6 +93,25 @@ void Robot::setSpeed(float _speed)
         return;
     }
     r_curspeed = _speed;
+}
+
+float Robot::getAccel() const { return r_accel; }
+void Robot::setAccel(float _a)
+{
+    if (_a < 0) { r_errorMsg = "加速度无效"; return; }
+    r_accel = _a;
+}
+int Robot::getMaxLoad() const { return r_maxLoad; }
+void Robot::setMaxLoad(int _l)
+{
+    if (_l < 0) { r_errorMsg = "最大负载无效"; return; }
+    r_maxLoad = _l;
+}
+float Robot::getLoad() const { return r_load; }
+void Robot::setLoad(float _l)
+{
+    if (_l < 0) { r_errorMsg = "负载无效"; return; }
+    r_load = _l;
 }
 
 int Robot::getTask() const

@@ -44,6 +44,13 @@ public:
     float getSpeed() const;
     void setSpeed(float _speed);
 
+    float getAccel() const;   // 加速度
+    void setAccel(float _a);
+    int getMaxLoad() const;   // 最大负载(kg)
+    void setMaxLoad(int _l);
+    float getLoad() const;    // 当前负载(kg)
+    void setLoad(float _l);
+
     int getTask() const;
     void setTask(int _tId);
 
@@ -64,6 +71,9 @@ private:
     int r_battery;        // 电量0-100
     RobotStatus r_status; // 机器人状态：0-空闲 1-执行任务 2-故障 3-离线 4-低电量 5-充电
     float r_curspeed;     // 当前速度
+    float r_accel;        // 加速度(参数配置)
+    int r_maxLoad;        // 最大负载 kg(参数配置)
+    float r_load;         // 当前负载 kg
     int r_curTaskId;      // 执行的任务id -1为无任务
     QString r_errorMsg;
     QString r_ip;          // 网络地址

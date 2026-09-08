@@ -158,6 +158,20 @@
            </widget>
           </item>
           <item>
+           <widget class="QPushButton" name="btnRecycleTask">
+            <property name="text">
+             <string>回收任务</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnCancelExecTask">
+            <property name="text">
+             <string>取消执行</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="btnDeleteTask">
             <property name="text">
              <string>删除任务</string>

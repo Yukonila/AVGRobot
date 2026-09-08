@@ -115,29 +115,59 @@ void TaskScheduler::assignPendingTasks()
 
     // 获取空闲机器人
     QList<int> idleRobots = m_robotManager->getIdleRobots();
+    int bestRobot = -1;
+
     if (idleRobots.isEmpty())
     {
-        // 只在任务首次开始等待时提示一次，避免每拍刷屏
-        if (taskId != m_lastWaitingTask)
+        // —— 抢占：无空闲时，若待分配任务优先级高于某执行中任务，则抢占该机器人 ——
+        const Task *pt = m_taskManager->getTask(taskId);
+        int newPri = pt ? pt->getPriority() : -1;
+        for (int rid : m_robotManager->getAllRobotIds())
         {
-            m_lastWaitingTask = taskId;
-            emit logMessage("[TaskScheduler] 没有空闲机器人，任务 " +
-                                QString::number(taskId) + " 待命中(有空闲时自动分配)",
-                            1);
-            emit noAvailableRobot(taskId);
+            const Robot *rb = m_robotManager->getRobot(rid);
+            if (!rb || rb->getStatus() != RobotStatus::Busy)
+                continue;
+            int curTask = rb->getTask();
+            if (curTask < 0)
+                continue;
+            const Task *cur = m_taskManager->getTask(curTask);
+            if (!cur || cur->getPriority() >= newPri)
+                continue;
+            // 抢占：释放该机器人，原任务退回待分配队列
+            m_robotManager->finishRobotTask(rid);
+            m_taskManager->reassignTask(curTask);
+            emit logMessage("[TaskScheduler] 高优先级任务 " + QString::number(taskId) +
+                                " 抢占机器人 " + QString::number(rid) + " (原任务 " +
+                                QString::number(curTask) + " 退回队列)",
+                            3);
+            bestRobot = rid;
+            break;
         }
-        return;
+        if (bestRobot < 0)
+        {
+            // 只在任务首次开始等待时提示一次，避免每拍刷屏
+            if (taskId != m_lastWaitingTask)
+            {
+                m_lastWaitingTask = taskId;
+                emit logMessage("[TaskScheduler] 没有空闲/可抢占机器人，任务 " +
+                                    QString::number(taskId) + " 待命中",
+                                1);
+                emit noAvailableRobot(taskId);
+            }
+            return;
+        }
     }
-
-    m_lastWaitingTask = -1;
-
-    int bestRobot = selectBestRobotForTask(taskId);
-    if (bestRobot == -1)
+    else
     {
-        emit logMessage("[TaskScheduler] 无法为任务 " +
-                            QString::number(taskId) + " 找到合适的机器人",
-                        2);
-        return;
+        m_lastWaitingTask = -1;
+        bestRobot = selectBestRobotForTask(taskId);
+        if (bestRobot == -1)
+        {
+            emit logMessage("[TaskScheduler] 无法为任务 " +
+                                QString::number(taskId) + " 找到合适的机器人",
+                            2);
+            return;
+        }
     }
 
     // 分配任务
