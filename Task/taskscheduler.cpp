@@ -102,10 +102,6 @@ void TaskScheduler::doScheduling()
 
     // 2. 检查执行中的任务进度(到终点→完成)
     checkExecutingTasks();
-
-    // 注：机器人的"回原点"由 RobotController 的移动模拟负责平滑移动，
-    //     这里不再瞬移，避免与模拟移动冲突。
-    // if (m_isReturnHome) { returnRobotsToHome(); }
 }
 
 void TaskScheduler::assignPendingTasks()
@@ -114,7 +110,6 @@ void TaskScheduler::assignPendingTasks()
     int taskId = m_taskManager->getNextPendingTask();
     if (taskId == -1)
     {
-        // 没有待分配任务，不重复发信号
         return;
     }
 
@@ -134,9 +129,8 @@ void TaskScheduler::assignPendingTasks()
         return;
     }
 
-    m_lastWaitingTask = -1; // 有空闲机器人了，下次再没空闲时重新提示
+    m_lastWaitingTask = -1;
 
-    // 选择最优机器人
     int bestRobot = selectBestRobotForTask(taskId);
     if (bestRobot == -1)
     {
@@ -154,7 +148,6 @@ void TaskScheduler::assignPendingTasks()
                             " 已分配给机器人 " + QString::number(bestRobot),
                         0);
 
-        // 同步机器人侧：记录正在执行的任务ID 并置为忙碌
         if (!m_robotManager->assignTaskToRobot(bestRobot, taskId))
         {
             emit logMessage("[TaskScheduler] 同步机器人 " + QString::number(bestRobot) +
@@ -186,14 +179,11 @@ void TaskScheduler::checkExecutingTasks()
             continue;
         }
 
-        // 检查机器人是否到达终点
-        // 实际项目中由 TCP 上报位置，这里用模拟方式
         float dx = robot->getPx() - task->getEndX();
         float dy = robot->getPy() - task->getEndY();
         float distance = calculateDistance(robot->getPx(), robot->getPy(),
                                            task->getEndX(), task->getEndY());
 
-        // 如果距离终点小于 0.5 单位，认为到达
         if (distance < 0.5f)
         {
             if (m_taskManager->finishTask(taskId))
@@ -203,7 +193,6 @@ void TaskScheduler::checkExecutingTasks()
                                     " 已完成 (机器人 " + QString::number(robotId) + ")",
                                 0);
 
-                // 同步机器人侧：清除任务ID 并回到空闲，准备接收下一任务
                 if (!m_robotManager->finishRobotTask(robotId))
                 {
                     emit logMessage("[TaskScheduler] 同步机器人 " + QString::number(robotId) +
@@ -225,13 +214,11 @@ void TaskScheduler::returnRobotsToHome()
         if (!robot)
             continue;
 
-        // 检查机器人是否空闲且不在原点
         if (robot->getStatus() != RobotStatus::Idle)
             continue;
 
         float distance = calculateDistance(robot->getPx(), robot->getPy(), 0.0f, 0.0f);
 
-        // 如果已经回到原点
         if (distance < 0.1f)
         {
             if (robot->getPx() != 0.0f || robot->getPy() != 0.0f)
@@ -242,9 +229,6 @@ void TaskScheduler::returnRobotsToHome()
             continue;
         }
 
-        // 模拟向原点移动（实际由 TCP 控制）
-        // 简化：直接回到原点
-        // 实际项目中，应该下发路径给机器人，这里只是演示
         robot->setPx(0.0f);
         robot->setPy(0.0f);
         emit robotReturnedHome(robotId);
