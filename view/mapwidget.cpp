@@ -420,9 +420,7 @@ void RobotMapWidget::computeWorldToScreen(float &minX, float &maxX, float &minY,
     outOffsetX = margin;
     outScaleX = (W - 2 * margin) / (maxX - minX);
     outScaleY = (H - margin - topMargin) / (maxY - minY);
-    outOffsetY = topMargin; // y 轴需翻转：sy = offsetY + scaleY*(maxY - wy)
-    // 为了让机器人位置 y 越低显示越靠上，这里用 maxY 作参考（见 robotAt）
-    // 简单起见：记录 topMargin 在 outOffsetY，y 用翻转公式
+    outOffsetY = topMargin; 
 }
 
 bool RobotMapWidget::robotAt(const QPointF &screen, int &outRobotId) const

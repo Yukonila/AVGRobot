@@ -1,9 +1,0 @@
-{
-    "users": [
-        {
-            "password": "12345",
-            "role": "admin",
-            "username": "koni"
-        }
-    ]
-}
