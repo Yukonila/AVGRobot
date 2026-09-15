@@ -59,6 +59,7 @@ private:
     void refreshTaskTable();
     void updateStatusBar();
     void updateSchedulerState();
+    void updateRobotInfo(int robotId);
     int getSelectedRobotId() const;
     int getSelectedTaskId() const;
     int getNextRobotId();

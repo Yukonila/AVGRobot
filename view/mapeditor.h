@@ -57,8 +57,12 @@ public:
 
 signals:
     void mapChanged();
-    // 用户点好起点/终点后请求创建任务(格子中心的世界坐标)
-    void requestAddTask(const QPointF &start, const QPointF &end);
+    // 点好起点/终点后请求创建任务(格子中心世界坐标；priority 1..4)
+    void requestAddTask(const QPointF &start, const QPointF &end, int priority);
+    // 需要写入日志栏的提示(如"请选择起点/终点")
+    void notifyLog(const QString &msg, int level);
+    // 画布上选中了某机器人(用于独立信息区)
+    void robotSelected(int robotId);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -109,6 +113,9 @@ private:
     QSpinBox *m_colSpin;
     QSpinBox *m_rowSpin;
     QPushButton *m_btnApplySize;
+    QComboBox *m_priorityCombo; // 任务优先级 1..4
+    QPushButton *m_btnForceStop; // 强制停止选中机器人
+    int m_selRobot;             // “查看/选择”选中的机器人
     QCheckBox *m_chkAutoHome;   // 自动回原点(隐藏占位)
     QPushButton *m_btnAllHome;  // 全部回原点(隐藏占位)
     QList<QPushButton *> m_editOnly; // 仅管理员可见的删除按钮

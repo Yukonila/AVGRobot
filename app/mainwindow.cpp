@@ -151,10 +151,10 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
     ui->btnAddTask->setVisible(false);
 
     // ========== 合一画布(地图编辑 + 监控 + 点画布新建任务) 作为首页签 ==========
-    m_mapEditor = new MapEditorWidget(ui->tabMain);
+    m_mapEditor = new MapEditorWidget(ui->canvasHost);
     m_mapEditor->setController(m_controller);
     m_mapEditor->setEditable(m_isAdmin); // 普通用户只读+可新建任务
-    ui->tabMain->insertTab(0, m_mapEditor, "地图");
+    ui->canvasLayout->addWidget(m_mapEditor);
     m_mapEditor->loadFromFile(MapEditorWidget::defaultMapPath()); // 尝试载入已保存地图
 
     // 地图变化 → 同步障碍网格给 controller(可达性/避障用)
@@ -167,20 +167,23 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
     pushGrid();
 
     // ===== 先画障碍/载入地图，才开放机器人/任务/调度(标签1=机器人表, 2=任务表) =====
-    ui->tabMain->setTabEnabled(1, false);
-    ui->tabMain->setTabEnabled(2, false);
     auto applyMapGate = [this]()
     {
         bool ready = m_mapEditor->mapLoaded();
-        ui->tabMain->setTabEnabled(1, ready);
-        ui->tabMain->setTabEnabled(2, ready);
+        QList<QWidget *> panel = {ui->tableRobot, ui->tableTask,
+                                  ui->btnAddRobot, ui->btnEditRobot, ui->btnDeleteRobot, ui->btnRefresh,
+                                  ui->btnDeleteTask, ui->btnRecycleTask, ui->btnCancelExecTask, ui->btnRefreshTask,
+                                  ui->btnStartScheduler, ui->btnStopScheduler, ui->btnScheduleOnce};
+        for (QWidget *w : panel)
+            if (w)
+                w->setEnabled(ready);
     };
     connect(m_mapEditor, &MapEditorWidget::mapChanged, this, applyMapGate);
     applyMapGate();
 
-    // 画布点好起点/终点 → 创建任务
+    // 画布点好起点/终点 → 创建任务(带优先级)
     connect(m_mapEditor, &MapEditorWidget::requestAddTask,
-            this, [this](const QPointF &s, const QPointF &e)
+            this, [this](const QPointF &s, const QPointF &e, int priority)
             {
                 // 可达性预检：无法到达(在障碍/被隔开)的任务不创建
                 if (!m_controller->isReachable((float)s.x(), (float)s.y(),
@@ -197,24 +200,29 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                     return;
                 }
                 int id = getNextTaskId();
-                if (!m_controller->addTask(id, 1, (float)s.x(), (float)s.y(),
+                if (!m_controller->addTask(id, priority, (float)s.x(), (float)s.y(),
                                            (float)e.x(), (float)e.y(),
                                            QString("画布任务%1").arg(id)))
                 {
                     QMessageBox::warning(this, "新建任务", "任务创建失败(ID重复或位置无效)");
                     return;
                 }
-                appendLog(QString("[画布] 新建任务 %1: (%2,%3) → (%4,%5)")
+                appendLog(QString("[画布] 新建任务 %1: (%2,%3) → (%4,%5) 优先级%6")
                               .arg(id)
                               .arg(s.x(), 0, 'f', 1)
                               .arg(s.y(), 0, 'f', 1)
                               .arg(e.x(), 0, 'f', 1)
-                              .arg(e.y(), 0, 'f', 1),
+                              .arg(e.y(), 0, 'f', 1)
+                              .arg(priority),
                           0);
                 refreshTaskTable();
                 refreshRobotTable();
                 updateStatusBar();
             });
+
+    // 画布提示写入日志(请选择起点/终点等)
+    connect(m_mapEditor, &MapEditorWidget::notifyLog,
+            this, [this](const QString &m, int lv) { appendLog(m, lv); });
 
     // 清空日志
     connect(ui->btnClearLog, &QPushButton::clicked, this, [this]()
@@ -222,6 +230,12 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
         ui->textLog->clear();
         ui->taskLog->clear();
         appendLog("日志已清空", 1); });
+
+    // 机器人信息区：表格选中 / 画布“查看/选择”点选 都会更新
+    connect(ui->tableRobot, &QTableWidget::itemSelectionChanged, this, [this]()
+            { updateRobotInfo(getSelectedRobotId()); });
+    connect(m_mapEditor, &MapEditorWidget::robotSelected, this, [this](int id)
+            { updateRobotInfo(id); });
 
     appendLog(m_isAdmin ? "[角色] 管理员登录：拥有全部权限"
                         : "[角色] 普通用户登录：仅监控 + 新建任务",
@@ -971,4 +985,36 @@ void MainWindow::onUserManagement()
     lay->addLayout(row1);
     lay->addLayout(row2);
     dlg.exec();
+}
+
+// ========== 机器人信息区 ==========
+void MainWindow::updateRobotInfo(int robotId)
+{
+    if (robotId < 0)
+    {
+        ui->robotInfo->setHtml("<span style='color:#888'>未选择机器人。<br>点击右侧列表或在地图上用“查看/选择”点机器人。</span>");
+        return;
+    }
+    const Robot *r = m_controller->getRobot(robotId);
+    if (!r)
+    {
+        ui->robotInfo->setHtml("<span style='color:#c62828'>机器人不存在</span>");
+        return;
+    }
+    QString html = QString(
+        "<b>机器人 R%1</b><br>"
+        "IP: %2<br>状态: %3<br>位置: (%4, %5)<br>电量: %6%%<br>速度: %7 / 上限 %8<br>"
+        "加速度: %9<br>最大负载: %10 kg<br>当前任务: %11")
+        .arg(robotId)
+        .arg(r->getIp())
+        .arg(statusToString(r->getStatus()))
+        .arg(r->getPx(), 0, 'f', 1)
+        .arg(r->getPy(), 0, 'f', 1)
+        .arg(r->getBattery())
+        .arg(r->getSpeed(), 0, 'f', 1)
+        .arg(m_controller->maxSpeed(), 0, 'f', 1)
+        .arg(r->getAccel(), 0, 'f', 1)
+        .arg(r->getMaxLoad())
+        .arg(r->getTask() < 0 ? "无" : QString::number(r->getTask()));
+    ui->robotInfo->setHtml(html);
 }

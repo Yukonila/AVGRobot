@@ -47,9 +47,12 @@ public:
                  float endX, float endY, const QString &desc = "");
     bool addTask(const Task &task);
     bool removeTask(int taskId);
-    bool removeNewestTask(); // 删除最近创建的任务
-    void clearAllTasks();    // 清空全部任务
-    void removeAllRobots();  // 清空全部机器人(尽量释放)
+    bool removeNewestTask();   // 删除最近任务(执行中的也删，并释放机器人)
+    void clearAllTasks();      // 清空全部任务
+    void clearFinishedTasks(); // 只清已完成/失败/取消的任务(不动执行中)
+    void removeAllRobots();    // 清空全部机器人(尽量释放)
+    bool forceStopRobot(int id); // 强制停止：任务退回待分配，机器人空闲
+    void removeChargerNear(float x, float y); // 移除该点所在格的充电桩
     Task *getTask(int taskId);
     // 取消/回收：同时释放绑定的机器人
     bool cancelExecutingTask(int taskId);
@@ -167,6 +170,10 @@ private:
     int m_gridRows = 30;
     QVector<char> m_obstacles;               // 0 空闲 / 1 障碍
     int cellIndex(int cx, int cy) const { return cy * m_gridCols + cx; }
+    // 带额外障碍格(其它机器人)的路径规划
+    QList<QPointF> planPathWorldEx(float ax, float ay, float bx, float by,
+                                   const QList<QPoint> &extra) const;
+    QHash<int, qint64> m_lastReplan; // robotId -> 上次重规划时间(ms)
     // 家的位置：放在画布中间某格子的中心(充电桩位于格内，不压网格线)
     QPointF homePoint() const
     {

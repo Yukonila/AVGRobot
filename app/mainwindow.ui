@@ -6,35 +6,45 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>840</width>
-    <height>640</height>
+    <width>1280</width>
+    <height>760</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>AVG 物流机器人任务调度系统</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QVBoxLayout" name="mainLayout">
     <item>
-     <widget class="QTabWidget" name="tabMain">
-      <property name="currentIndex">
-       <number>1</number>
+     <widget class="QSplitter" name="mainSplitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
-      <widget class="QWidget" name="robotPage">
-       <attribute name="title">
-        <string>机器人管理</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="robotPageLayout">
+      <widget class="QWidget" name="canvasHost">
+       <layout class="QVBoxLayout" name="canvasLayout"/>
+      </widget>
+      <widget class="QWidget" name="rightPanel">
+       <property name="minimumSize">
+        <size>
+         <width>380</width>
+         <height>0</height>
+        </size>
+       </property>
+       <layout class="QVBoxLayout" name="rightLayout">
+        <item>
+         <widget class="QLabel" name="labelRobotList">
+          <property name="text">
+           <string>机器人列表</string>
+          </property>
+         </widget>
+        </item>
         <item>
          <widget class="QTableWidget" name="tableRobot">
           <property name="editTriggers">
-           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
-          </property>
-          <property name="alternatingRowColors">
-           <bool>true</bool>
+           <set>QAbstractItemView::NoEditTriggers</set>
           </property>
           <property name="selectionBehavior">
-           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+           <enum>QAbstractItemView::SelectRows</enum>
           </property>
          </widget>
         </item>
@@ -68,28 +78,67 @@
             </property>
            </widget>
           </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelTaskList">
+          <property name="text">
+           <string>任务列表</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="tableTask">
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectRows</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="taskButtonLayout">
           <item>
-           <spacer name="robotButtonSpacer">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
+           <widget class="QPushButton" name="btnAddTask">
+            <property name="text">
+             <string>新建任务</string>
             </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
+            <property name="visible">
+             <bool>false</bool>
             </property>
-           </spacer>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnDeleteTask">
+            <property name="text">
+             <string>删除任务</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnRecycleTask">
+            <property name="text">
+             <string>回收任务</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnCancelExecTask">
+            <property name="text">
+             <string>取消执行</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnRefreshTask">
+            <property name="text">
+             <string>刷新</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="taskPage">
-       <attribute name="title">
-        <string>任务调度</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="taskPageLayout">
         <item>
          <layout class="QHBoxLayout" name="schedulerControlLayout">
           <item>
@@ -100,9 +149,9 @@
            </widget>
           </item>
           <item>
-           <spacer name="schedulerSpacer">
+           <spacer name="schedSpacer">
             <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
+             <enum>Qt::Horizontal</enum>
             </property>
             <property name="sizeHint" stdset="0">
              <size>
@@ -136,69 +185,21 @@
          </layout>
         </item>
         <item>
-         <widget class="QTableWidget" name="tableTask">
-          <property name="editTriggers">
-           <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
-          </property>
-          <property name="alternatingRowColors">
-           <bool>true</bool>
-          </property>
-          <property name="selectionBehavior">
-           <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+         <widget class="QLabel" name="labelRobotInfo">
+          <property name="text">
+           <string>机器人信息</string>
           </property>
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="taskButtonLayout">
-          <item>
-           <widget class="QPushButton" name="btnAddTask">
-            <property name="text">
-             <string>新建任务</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnRecycleTask">
-            <property name="text">
-             <string>回收任务</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnCancelExecTask">
-            <property name="text">
-             <string>取消执行</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnDeleteTask">
-            <property name="text">
-             <string>删除任务</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="btnRefreshTask">
-            <property name="text">
-             <string>刷新</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="taskButtonSpacer">
-            <property name="orientation">
-             <enum>Qt::Orientation::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
+         <widget class="QTextBrowser" name="robotInfo">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>120</height>
+           </size>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -275,7 +276,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>840</width>
+     <width>1280</width>
      <height>27</height>
     </rect>
    </property>

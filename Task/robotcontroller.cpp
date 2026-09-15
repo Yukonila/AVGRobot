@@ -2,6 +2,7 @@
 #include "Data/datamanager.h"
 #include <QDebug>
 #include <QPoint>
+#include <QDateTime>
 #include <QRandomGenerator>
 #include <cmath>
 
@@ -210,7 +211,57 @@ bool RobotController::addTask(const Task &task)
 
 bool RobotController::removeTask(int taskId)
 {
+    Task *t = m_taskManager->getTask(taskId);
+    if (!t)
+        return false;
+    // 执行中的任务：先释放机器人，避免机器人一直忙碌
+    int rid = t->getAssignedRobotId();
+    if (rid >= 0)
+    {
+        Robot *r = m_robotManager->getRobot(rid);
+        if (r && r->getTask() == taskId)
+            m_robotManager->finishRobotTask(rid);
+    }
     return m_taskManager->removeTask(taskId);
+}
+
+void RobotController::clearFinishedTasks()
+{
+    QList<int> ids = m_taskManager->getAllTaskIds();
+    for (int id : ids)
+    {
+        Task *t = m_taskManager->getTask(id);
+        if (t && t->isFinished())
+            removeTask(id);
+    }
+}
+
+bool RobotController::forceStopRobot(int id)
+{
+    Robot *r = m_robotManager->getRobot(id);
+    if (!r)
+        return false;
+    int tid = r->getTask();
+    if (tid >= 0)
+    {
+        m_robotManager->finishRobotTask(id); // 机器人回空闲
+        m_taskManager->reassignTask(tid);    // 任务退回待分配(未完成)
+        emit logMessage("[控制] 机器人 " + QString::number(id) +
+                            " 已强制停止，任务 " + QString::number(tid) + " 退回待分配",
+                        3);
+    }
+    return true;
+}
+
+void RobotController::removeChargerNear(float x, float y)
+{
+    for (int i = m_chargers.size() - 1; i >= 0; --i)
+    {
+        const QPointF &ch = m_chargers[i];
+        if (std::sqrt((ch.x() - x) * (ch.x() - x) + (ch.y() - y) * (ch.y() - y)) < 0.5f)
+            m_chargers.removeAt(i);
+    }
+    m_chargeTarget.clear();
 }
 
 bool RobotController::removeNewestTask()
@@ -227,6 +278,21 @@ bool RobotController::removeNewestTask()
 
 void RobotController::clearAllTasks()
 {
+    // 先释放所有在执行中的机器人，避免清空后机器人仍“忙碌”
+    QList<int> exec = m_taskManager->getExecutingTaskIds();
+    for (int tid : exec)
+    {
+        Task *t = m_taskManager->getTask(tid);
+        if (!t)
+            continue;
+        int rid = t->getAssignedRobotId();
+        if (rid >= 0)
+        {
+            Robot *r = m_robotManager->getRobot(rid);
+            if (r && r->getTask() == tid)
+                m_robotManager->finishRobotTask(rid);
+        }
+    }
     m_taskManager->clearAll();
 }
 
@@ -472,6 +538,12 @@ bool RobotController::isReachable(float ax, float ay, float bx, float by) const
 
 QList<QPointF> RobotController::planPathWorld(float ax, float ay, float bx, float by) const
 {
+    return planPathWorldEx(ax, ay, bx, by, QList<QPoint>());
+}
+
+QList<QPointF> RobotController::planPathWorldEx(float ax, float ay, float bx, float by,
+                                                const QList<QPoint> &extra) const
+{
     QList<QPointF> out;
     auto toCell = [](float w) -> int { return (int)std::floor(w); };
     int sx = toCell(ax), sy = toCell(ay);
@@ -483,6 +555,7 @@ QList<QPointF> RobotController::planPathWorld(float ax, float ay, float bx, floa
         return out;
     if (m_obstacles.value(cellIndex(sx, sy), 1) == 1 || m_obstacles.value(cellIndex(gx, gy), 1) == 1)
         return out;
+    Q_UNUSED(extra);
     if (sx == gx && sy == gy)
     {
         out.append(QPointF(sx + 0.5f, sy + 0.5f));
@@ -510,6 +583,8 @@ QList<QPointF> RobotController::planPathWorld(float ax, float ay, float bx, floa
                 continue;
             if (m_obstacles.value(cellIndex(nx, ny), 1) == 1)
                 continue;
+            if (extra.contains(QPoint(nx, ny)))
+                continue; // 其它机器人所在格视为障碍
             int nidx = cellIndex(nx, ny);
             if (vis[nidx])
                 continue;
@@ -730,7 +805,35 @@ void RobotController::stepBusyRobot(int id, Robot *r, float dt)
         float nx = r->getPx() + dx / dist * move;
         float ny = r->getPy() + dy / dist * move;
         if (robotProximityBlocked(id, nx, ny) || blockedByCharger(id, nx, ny))
-            return; // 前方有机器人/被充电桩格拦住 → 等待
+        {
+            // 前方有停放的机器人/充电桩格：把它当作障碍重新寻路一次(限频)
+            qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (now - m_lastReplan.value(id, 0) > 600)
+            {
+                QList<QPoint> extra;
+                for (int oid : m_robotManager->getAllRobotIds())
+                {
+                    if (oid == id)
+                        continue;
+                    const Robot *o = m_robotManager->getRobot(oid);
+                    if (!o)
+                        continue;
+                    extra.append(QPoint((int)std::floor(o->getPx()), (int)std::floor(o->getPy())));
+                }
+                QList<QPointF> np = planPathWorldEx(r->getPx(), r->getPy(),
+                                                    task->getEndX(), task->getEndY(), extra);
+                m_lastReplan[id] = now;
+                if (!np.isEmpty())
+                {
+                    m_robotPlan[id] = np;
+                    m_robotPlanIdx[id] = 0;
+                    emit logMessage("[调度] 机器人 " + QString::number(id) +
+                                        " 前方被停放机器人占用，重新规划绕行路径",
+                                    1);
+                }
+            }
+            return; // 本次等待
+        }
         m_robotManager->updateRobotPosition(id, nx, ny);
         drainBattery(id, move, speed);
         return;

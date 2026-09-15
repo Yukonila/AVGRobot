@@ -36,7 +36,7 @@ MapEditorWidget::MapEditorWidget(QWidget *parent)
     : QWidget(parent)
     , m_cols(50)
     , m_rows(30)
-    , m_cell(18)
+    , m_cell(16)   // 锁定 16px/格(全屏观感好)
     , m_grid(m_cols * m_rows, 0)
     , m_start(-1, -1)
     , m_end(-1, -1)
@@ -55,6 +55,9 @@ MapEditorWidget::MapEditorWidget(QWidget *parent)
     , m_colSpin(nullptr)
     , m_rowSpin(nullptr)
     , m_btnApplySize(nullptr)
+    , m_priorityCombo(nullptr)
+    , m_btnForceStop(nullptr)
+    , m_selRobot(-1)
     , m_chkAutoHome(nullptr)
     , m_btnAllHome(nullptr)
     , m_status(nullptr)
@@ -107,6 +110,7 @@ void MapEditorWidget::startNewTaskMode()
         m_toolCombo->setCurrentIndex(2);
     m_pickStart = QPoint(-1, -1);
     setStatusText("新建任务: 请点第 1 点作为任务起点");
+    emit notifyLog("请选择任务起点", 1);
 }
 
 bool MapEditorWidget::isObstacle(int x, int y) const
@@ -164,6 +168,17 @@ void MapEditorWidget::setupToolbar()
     x += 112;
     connect(m_btnStart, &QPushButton::clicked, this, [this]()
             { if (m_controller) m_controller->startScheduler(1000); });
+
+    // 任务优先级(1..4)：新建任务时生效，调度按优先级分配
+    m_priorityCombo = new QComboBox(this);
+    m_priorityCombo->addItem("优先级1", 1);
+    m_priorityCombo->addItem("优先级2", 2);
+    m_priorityCombo->addItem("优先级3", 3);
+    m_priorityCombo->addItem("优先级4", 4);
+    m_priorityCombo->setCurrentIndex(1); // 默认 2
+    m_priorityCombo->setFixedSize(88, 24);
+    m_priorityCombo->move(x, 3);
+    x += 96;
 
     m_btnClear = new QPushButton("清空障碍", this);
     placeControl(m_btnClear, x);
@@ -231,14 +246,18 @@ void MapEditorWidget::setupToolbar()
 
     // ===== 第二行：删除/清空按钮(仅管理员) =====
     int x2 = 6;
-    // 解除卡位(所有人可用)
+    // 强制停止选中机器人(管理员)：任务退回待分配，机器人空闲
     {
-        auto *b = new QPushButton("解除卡位", this);
-        b->setFixedSize(104, 24);
-        b->move(x2, 31);
-        x2 += 112;
-        connect(b, &QPushButton::clicked, this, [this]()
-                { if (m_controller) m_controller->resolveConflicts(); });
+        m_btnForceStop = new QPushButton("强制停止机器人", this);
+        m_btnForceStop->setFixedSize(120, 24);
+        m_btnForceStop->move(x2, 31);
+        x2 += 128;
+        m_editOnly.append(m_btnForceStop);
+        connect(m_btnForceStop, &QPushButton::clicked, this, [this]()
+                {
+            if (m_selRobot < 0) { setStatusText("请先用“查看/选择”点选一台机器人"); return; }
+            if (m_controller) m_controller->forceStopRobot(m_selRobot);
+            setStatusText("已强制停止机器人"); });
     }
 
     auto addDelBtn = [&](const QString &text, std::function<void()> fn)
@@ -268,8 +287,8 @@ void MapEditorWidget::setupToolbar()
     };
     m_btnRmLast = makeTaskDel("删除上一个任务", [this]()
                               { if (m_controller) m_controller->removeNewestTask(); });
-    m_btnClearTasks = makeTaskDel("清空任务", [this]()
-                                  { if (m_controller) m_controller->clearAllTasks(); });
+    m_btnClearTasks = makeTaskDel("清空任务(仅已完结)", [this]()
+                                  { if (m_controller) m_controller->clearFinishedTasks(); });
 
     // 地图设计类按钮：新建任务(工具2)时隐藏设计按钮、显示“任务管理”按钮
     auto setDesignMode = [this](bool designOn)
@@ -419,6 +438,8 @@ void MapEditorWidget::applyTool(const QPoint &cell)
         int rid = -1;
         if (robotAtWorld((float)w.x(), (float)w.y(), rid))
         {
+            m_selRobot = rid;
+            emit robotSelected(rid);
             const Robot *r = m_controller ? m_controller->getRobot(rid) : nullptr;
             if (r)
                 setStatusText(QString("机器人 R%1 | 状态:%2 | 位置:(%3,%4) | 电量:%5% | 速度:%6 | 任务:%7")
@@ -440,6 +461,7 @@ void MapEditorWidget::applyTool(const QPoint &cell)
         if (m_pickStart.x() < 0)
         {
             m_pickStart = cell;
+            emit notifyLog("请选择任务终点", 1);
             setStatusText("已选起点(" + QString::number(cell.x()) + "," + QString::number(cell.y()) +
                           ")，请再点一点作为任务终点");
             update();
@@ -454,7 +476,11 @@ void MapEditorWidget::applyTool(const QPoint &cell)
             QPointF s = cellWorldCenter(m_pickStart);
             QPointF e = cellWorldCenter(cell);
             m_pickStart = QPoint(-1, -1);
-            emit requestAddTask(s, e);
+            int prio = m_priorityCombo ? m_priorityCombo->currentData().toInt() : 2;
+            emit requestAddTask(s, e, prio);
+            emit notifyLog(QString("任务已创建(起点(%1,%2)→终点(%3,%4), 优先级%5)")
+                               .arg(s.x(),0,'f',0).arg(s.y(),0,'f',0)
+                               .arg(e.x(),0,'f',0).arg(e.y(),0,'f',0).arg(prio), 0);
             setStatusText("任务已提交");
             update();
         }
@@ -472,8 +498,13 @@ void MapEditorWidget::applyTool(const QPoint &cell)
         m_grid[idx] = 1;
         m_loadedAny = true;
         break;
-    case 1: // 擦除
+    case 1: // 擦除(障碍与充电桩都能擦)
         m_grid[idx] = 0;
+        if (m_controller)
+        {
+            QPointF w = cellWorldCenter(cell);
+            m_controller->removeChargerNear((float)w.x(), (float)w.y());
+        }
         break;
     case 3: // 设充电桩
         if (m_controller)
@@ -505,6 +536,11 @@ void MapEditorWidget::mousePressEvent(QMouseEvent *event)
         if (c.x() >= 0)
         {
             m_grid[gridIndex(c.x(), c.y())] = 0;
+            if (m_controller)
+            {
+                QPointF w = cellWorldCenter(c);
+                m_controller->removeChargerNear((float)w.x(), (float)w.y());
+            }
             update();
             emit mapChanged();
         }
@@ -522,6 +558,11 @@ void MapEditorWidget::mouseMoveEvent(QMouseEvent *event)
         if (cell.x() >= 0)
         {
             m_grid[gridIndex(cell.x(), cell.y())] = (m_tool == 0) ? 1 : 0;
+            if (m_tool == 1 && m_controller)
+            {
+                QPointF w = cellWorldCenter(cell);
+                m_controller->removeChargerNear((float)w.x(), (float)w.y());
+            }
             update();
             emit mapChanged();
         }
@@ -556,7 +597,7 @@ void MapEditorWidget::zoomAt(int delta, const QPoint &pos)
 
 void MapEditorWidget::wheelEvent(QWheelEvent *event)
 {
-    zoomAt(event->angleDelta().y(), event->pos());
+    // 按需求锁定 16px/格，滚轮不再缩放
     event->accept();
 }
 
