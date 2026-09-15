@@ -287,7 +287,7 @@ void MapEditorWidget::setupToolbar()
     };
     m_btnRmLast = makeTaskDel("删除上一个任务", [this]()
                               { if (m_controller) m_controller->removeNewestTask(); });
-    m_btnClearTasks = makeTaskDel("清空任务(仅已完结)", [this]()
+    m_btnClearTasks = makeTaskDel("清空任务", [this]()
                                   { if (m_controller) m_controller->clearFinishedTasks(); });
 
     // 地图设计类按钮：新建任务(工具2)时隐藏设计按钮、显示“任务管理”按钮

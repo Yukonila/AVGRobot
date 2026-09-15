@@ -269,10 +269,23 @@ bool RobotController::removeNewestTask()
     QList<int> ids = m_taskManager->getAllTaskIds();
     if (ids.isEmpty())
         return false;
+
     int mx = ids.first();
     for (int id : ids)
         if (id > mx)
             mx = id;
+
+    // 删之前：找到正在执行该任务的机器人并释放
+    for (int rid : m_robotManager->getAllRobotIds())
+    {
+        Robot *r = m_robotManager->getRobot(rid);
+        if (r && r->getTask() == mx)
+        {
+            m_robotManager->finishRobotTask(rid); // 清 task + 置 Idle
+            break;
+        }
+    }
+
     return m_taskManager->removeTask(mx);
 }
 
@@ -333,7 +346,7 @@ bool RobotController::recycleTask(int taskId)
         return false;
     int rid = t->getAssignedRobotId();
     if (rid >= 0 && m_robotManager->getRobot(rid))
-        m_robotManager->finishRobotTask(rid); // 释放机器人
+        m_robotManager->finishRobotTask(rid);   // 释放机器人
     return m_taskManager->reassignTask(taskId); // 放回待分配队列
 }
 
@@ -492,7 +505,8 @@ bool RobotController::isBlockedWorld(float x, float y) const
 bool RobotController::isReachable(float ax, float ay, float bx, float by) const
 {
     // 世界坐标→格子
-    auto toCell = [](float w) -> int { return (int)std::floor(w); };
+    auto toCell = [](float w) -> int
+    { return (int)std::floor(w); };
     int sx = toCell(ax), sy = toCell(ay);
     int gx = toCell(bx), gy = toCell(by);
 
@@ -545,7 +559,8 @@ QList<QPointF> RobotController::planPathWorldEx(float ax, float ay, float bx, fl
                                                 const QList<QPoint> &extra) const
 {
     QList<QPointF> out;
-    auto toCell = [](float w) -> int { return (int)std::floor(w); };
+    auto toCell = [](float w) -> int
+    { return (int)std::floor(w); };
     int sx = toCell(ax), sy = toCell(ay);
     int gx = toCell(bx), gy = toCell(by);
     auto inBounds = [&](int x, int y)
@@ -995,8 +1010,8 @@ void RobotController::stepRobots()
         return; // TCP 模式：位置由真实数据更新，不做模拟移动
 
     const float dt = m_simIntervalMs / 1000.0f;
-    const float defaultSpeed = 8.0f;   // 无速度配置时的模拟速度(单位/秒)
-    const float arriveAt = 0.5f;        // 视为到达某段目标的判定距离
+    const float defaultSpeed = 8.0f; // 无速度配置时的模拟速度(单位/秒)
+    const float arriveAt = 0.5f;     // 视为到达某段目标的判定距离
 
     const QList<int> ids = m_robotManager->getAllRobotIds();
     for (int id : ids)
