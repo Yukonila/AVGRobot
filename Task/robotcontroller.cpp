@@ -281,7 +281,7 @@ bool RobotController::removeNewestTask()
         Robot *r = m_robotManager->getRobot(rid);
         if (r && r->getTask() == mx)
         {
-            m_robotManager->finishRobotTask(rid); // 清 task + 置 Idle
+            m_robotManager->finishRobotTask(rid); 
             break;
         }
     }

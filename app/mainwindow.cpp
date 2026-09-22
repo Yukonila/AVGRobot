@@ -24,6 +24,7 @@
 #include <QHeaderView>
 #include <QPushButton>
 #include <QColor>
+#include <QJsonObject>
 
 MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
     : QMainWindow(parent), ui(new Ui::MainWindow), m_controller(new RobotController(this)), m_isAdmin(isAdmin), m_simulate(simulate), m_tcpServer(nullptr)
@@ -67,21 +68,29 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
 
     // ========== 任务 / 调度信号 → 刷新任务表与日志 ==========
     connect(m_controller, &RobotController::taskAdded,
-            this, [this](int taskId) { appendLog(QString("[任务] %1 已创建").arg(taskId), 0); refreshTaskTable(); });
+            this, [this](int taskId)
+            { appendLog(QString("[任务] %1 已创建").arg(taskId), 0); refreshTaskTable(); });
     connect(m_controller, &RobotController::taskRemoved,
-            this, [this](int taskId) { appendLog(QString("[任务] %1 已删除").arg(taskId), 1); refreshTaskTable(); });
+            this, [this](int taskId)
+            { appendLog(QString("[任务] %1 已删除").arg(taskId), 1); refreshTaskTable(); });
     connect(m_controller, &RobotController::taskAssigned,
-            this, [this](int taskId, int robotId) { appendLog(QString("[调度] 任务 %1 → 机器人 %2").arg(taskId).arg(robotId), 0); refreshTaskTable(); refreshRobotTable(); updateStatusBar(); });
+            this, [this](int taskId, int robotId)
+            { appendLog(QString("[调度] 任务 %1 → 机器人 %2").arg(taskId).arg(robotId), 0); refreshTaskTable(); refreshRobotTable(); updateStatusBar(); });
     connect(m_controller, &RobotController::taskFinished,
-            this, [this](int taskId) { appendLog(QString("[任务] %1 已完成").arg(taskId), 0); refreshTaskTable(); refreshRobotTable(); updateStatusBar(); });
+            this, [this](int taskId)
+            { appendLog(QString("[任务] %1 已完成").arg(taskId), 0); refreshTaskTable(); refreshRobotTable(); updateStatusBar(); });
     connect(m_controller, &RobotController::taskFailed,
-            this, [this](int taskId) { appendLog(QString("[任务] %1 异常").arg(taskId), 2); refreshTaskTable(); });
+            this, [this](int taskId)
+            { appendLog(QString("[任务] %1 异常").arg(taskId), 2); refreshTaskTable(); });
     connect(m_controller, &RobotController::taskCancelled,
-            this, [this](int taskId) { appendLog(QString("[任务] %1 已取消").arg(taskId), 1); refreshTaskTable(); });
+            this, [this](int taskId)
+            { appendLog(QString("[任务] %1 已取消").arg(taskId), 1); refreshTaskTable(); });
     connect(m_controller, &RobotController::schedulerStarted,
-            this, [this]() { updateSchedulerState(); });
+            this, [this]()
+            { updateSchedulerState(); });
     connect(m_controller, &RobotController::schedulerStopped,
-            this, [this]() { updateSchedulerState(); });
+            this, [this]()
+            { updateSchedulerState(); });
 
     // ========== 连接机器人按钮信号 ==========
     connect(ui->btnAddRobot, &QPushButton::clicked,
@@ -99,9 +108,11 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
 
     // ========== 连接任务按钮信号 ==========
     connect(ui->btnAddTask, &QPushButton::clicked,
-            this, [this]() { onBtnAddTaskClicked(); });
+            this, [this]()
+            { onBtnAddTaskClicked(); });
     connect(ui->btnDeleteTask, &QPushButton::clicked,
-            this, [this]() { onBtnDeleteTaskClicked(); });
+            this, [this]()
+            { onBtnDeleteTaskClicked(); });
     connect(ui->btnRecycleTask, &QPushButton::clicked,
             this, [this]()
             {
@@ -114,8 +125,7 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                     refreshTaskTable(); refreshRobotTable(); updateStatusBar();
                 }
                 else
-                    QMessageBox::warning(this, "回收", "任务已是终态或不存在，无法回收");
-            });
+                    QMessageBox::warning(this, "回收", "任务已是终态或不存在，无法回收"); });
     connect(ui->btnCancelExecTask, &QPushButton::clicked,
             this, [this]()
             {
@@ -128,10 +138,10 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                     refreshTaskTable(); refreshRobotTable(); updateStatusBar();
                 }
                 else
-                    QMessageBox::warning(this, "取消", "取消失败(任务不存在或已完成)");
-            });
+                    QMessageBox::warning(this, "取消", "取消失败(任务不存在或已完成)"); });
     connect(ui->btnRefreshTask, &QPushButton::clicked,
-            this, [this]() { refreshTaskTable(); appendLog("任务列表已刷新", 1); });
+            this, [this]()
+            { refreshTaskTable(); appendLog("任务列表已刷新", 1); });
 
     // ========== 调度控制按钮 ==========
     // 调度前强制同步画布障碍，避免首个任务用了空网格而直线穿障
@@ -141,11 +151,14 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                                  m_mapEditor->obstacleGrid());
     };
     connect(ui->btnStartScheduler, &QPushButton::clicked,
-            this, [this, pushGridNow]() { pushGridNow(); m_controller->startScheduler(1000); });
+            this, [this, pushGridNow]()
+            { pushGridNow(); m_controller->startScheduler(1000); });
     connect(ui->btnStopScheduler, &QPushButton::clicked,
-            this, [this]() { m_controller->stopScheduler(); });
+            this, [this]()
+            { m_controller->stopScheduler(); });
     connect(ui->btnScheduleOnce, &QPushButton::clicked,
-            this, [this, pushGridNow]() { pushGridNow(); m_controller->scheduleOnce(); refreshTaskTable(); });
+            this, [this, pushGridNow]()
+            { pushGridNow(); m_controller->scheduleOnce(); refreshTaskTable(); });
 
     // 新建任务改在地图画布上完成(点起点/终点)，隐藏旧的“数字输入”入口
     ui->btnAddTask->setVisible(false);
@@ -217,12 +230,12 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                           0);
                 refreshTaskTable();
                 refreshRobotTable();
-                updateStatusBar();
-            });
+                updateStatusBar(); });
 
     // 画布提示写入日志(请选择起点/终点等)
     connect(m_mapEditor, &MapEditorWidget::notifyLog,
-            this, [this](const QString &m, int lv) { appendLog(m, lv); });
+            this, [this](const QString &m, int lv)
+            { appendLog(m, lv); });
 
     // 清空日志
     connect(ui->btnClearLog, &QPushButton::clicked, this, [this]()
@@ -234,6 +247,10 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
     // 机器人信息区：表格选中 / 画布“查看/选择”点选 都会更新
     connect(ui->tableRobot, &QTableWidget::itemSelectionChanged, this, [this]()
             { updateRobotInfo(getSelectedRobotId()); });
+    // 任务表格选中变化 → 显示任务信息到 logInfo
+    connect(ui->tableTask, &QTableWidget::itemSelectionChanged,
+            this, [this]()
+            { updateTaskInfo(getSelectedTaskId()); });
     connect(m_mapEditor, &MapEditorWidget::robotSelected, this, [this](int id)
             { updateRobotInfo(id); });
 
@@ -246,7 +263,8 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
     {
         m_tcpServer = new TcpRobotServer(this);
         connect(m_tcpServer, &TcpRobotServer::logMessage,
-                this, [this](const QString &m, int lv) { appendLog(m, lv); });
+                this, [this](const QString &m, int lv)
+                { appendLog(m, lv); });
         connect(m_tcpServer, &TcpRobotServer::robotConnected,
                 this, [this](int id, const QString &ip)
                 {
@@ -254,8 +272,7 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                         m_controller->addRobot(id, ip); // 未注册则按上报接入
                     appendLog(QString("[TCP] 机器人 %1 接入登记").arg(id), 0);
                     refreshRobotTable();
-                    updateStatusBar();
-                });
+                    updateStatusBar(); });
         connect(m_tcpServer, &TcpRobotServer::robotReported,
                 this, [this](int id, float x, float y, int battery, int status, bool hasPos)
                 {
@@ -268,23 +285,40 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                     if (hasPos)
                         m_controller->updatePosition(id, x, y);
                     refreshRobotTable();
-                    updateStatusBar();
-                });
+                    updateStatusBar(); });
         connect(m_tcpServer, &TcpRobotServer::robotDisconnected,
                 this, [this](int id)
                 {
                     if (m_controller->getRobot(id))
                         m_controller->updateStatus(id, RobotStatus::Offline);
-                    updateStatusBar();
-                });
+                    updateStatusBar(); });
         connect(m_tcpServer, &TcpRobotServer::robotHeartbeatTimeout,
                 this, [this](int id)
                 {
                     if (m_controller->getRobot(id))
                         m_controller->updateStatus(id, RobotStatus::Offline);
                     appendLog(QString("[TCP] 机器人 %1 心跳超时→离线").arg(id), 2);
-                    updateStatusBar();
-                });
+                    updateStatusBar(); });
+        // TCP 模式下：调度分配任务后，用 0x02 帧下发给真实机器人
+        connect(m_controller, &RobotController::taskAssigned, this, [this](int taskId, int robotId)
+                {
+            if (m_simulate || !m_tcpServer)
+                return;
+            Task *t = m_controller->getTask(taskId);
+            QJsonObject o;
+            o["func"] = 2; // 任务下发
+            o["taskId"] = taskId;
+            if (t)
+            {
+                o["startX"] = t->getStartX();
+                o["startY"] = t->getStartY();
+                o["endX"] = t->getEndX();
+                o["endY"] = t->getEndY();
+                o["priority"] = t->getPriority();
+            }
+            m_tcpServer->sendToRobot(robotId, o);
+            appendLog(QString("[TCP] 已向机器人 %1 下发任务 %2").arg(robotId).arg(taskId), 0); });
+
         if (!m_tcpServer->start(8888))
             appendLog("[TCP] 服务端启动失败(端口被占用?)", 2);
     }
@@ -504,7 +538,7 @@ void MainWindow::onBtnAddTaskClicked()
 
     auto *idSpin = new QSpinBox(&dlg);
     idSpin->setRange(0, 999999);
-    idSpin->setValue(getNextTaskId());   // 任务ID从1开始自增
+    idSpin->setValue(getNextTaskId()); // 任务ID从1开始自增
 
     auto *prioCombo = new QComboBox(&dlg);
     prioCombo->addItem("低", 0);
@@ -693,11 +727,13 @@ void MainWindow::updateStatusBar()
     int busy = m_controller->getBusyCount();
     int fault = m_controller->getFaultCount();
 
-    statusBar()->showMessage(QString("共 %1 个机器人 | 空闲: %2 | 忙碌: %3 | 故障: %4")
-                                 .arg(total)
-                                 .arg(idle)
-                                 .arg(busy)
-                                 .arg(fault));
+    statusBar()->showMessage(
+        QString("机器人 共%1 空闲%2 忙碌%3 故障%4   |   任务 待分配%5 执行中%6 已完成%7 失败%8")
+            .arg(total).arg(idle).arg(busy).arg(fault)
+            .arg(m_controller->getPendingCount())
+            .arg(m_controller->getExecutingCount())
+            .arg(m_controller->getCompletedCount())
+            .arg(m_controller->getFailedCount()));
 }
 
 int MainWindow::getSelectedRobotId() const
@@ -757,9 +793,9 @@ void MainWindow::refreshTaskTable()
         if (!task)
             continue;
 
-        const QString prio = task->getPriority() == 2 ? "高"
-                            : task->getPriority() == 1 ? "中"
-                                                       : "低";
+        const QString prio = task->getPriority() == 2   ? "高"
+                             : task->getPriority() == 1 ? "中"
+                                                        : "低";
         const QString robot = task->getAssignedRobotId() < 0
                                   ? "未分配"
                                   : QString::number(task->getAssignedRobotId());
@@ -921,21 +957,21 @@ void MainWindow::onUserManagement()
     };
 
     connect(btnMakeAdmin, &QPushButton::clicked, &dlg, [&]()
-    {
+            {
         QString u = selectedName();
         if (u.isEmpty())
             return;
         UserManager m; m.load();
         if (m.setRole(u, true)) { refresh(); } });
     connect(btnMakeUser, &QPushButton::clicked, &dlg, [&]()
-    {
+            {
         QString u = selectedName();
         if (u.isEmpty())
             return;
         UserManager m; m.load();
         if (m.setRole(u, false)) { refresh(); } });
     connect(btnChangePwd, &QPushButton::clicked, &dlg, [&]()
-    {
+            {
         QString u = selectedName();
         if (u.isEmpty())
             return;
@@ -943,7 +979,7 @@ void MainWindow::onUserManagement()
         QString pwd = QInputDialog::getText(&dlg, "修改密码", "新密码:", QLineEdit::Password, "", &ok);
         if (ok && !pwd.isEmpty()) { UserManager m; m.load(); m.changePassword(u, pwd); } });
     connect(btnAdd, &QPushButton::clicked, &dlg, [&]()
-    {
+            {
         bool okU = false;
         QString u = QInputDialog::getText(&dlg, "新增账号", "用户名:", QLineEdit::Normal, "", &okU);
         if (!okU || u.trimmed().isEmpty())
@@ -955,7 +991,7 @@ void MainWindow::onUserManagement()
         UserManager m; m.load();
         if (m.addUser(u, p)) { refresh(); } });
     connect(btnDel, &QPushButton::clicked, &dlg, [&]()
-    {
+            {
         QString u = selectedName();
         if (u.isEmpty())
             return;
@@ -965,8 +1001,7 @@ void MainWindow::onUserManagement()
             QMessageBox::warning(&dlg, "删除", "删除失败(最后一个管理员不能删或不存在)");
         }
         else
-            refresh();
-    });
+            refresh(); });
     connect(btnClose, &QPushButton::clicked, &dlg, &QDialog::accept);
 
     auto *row1 = new QHBoxLayout;
@@ -992,29 +1027,82 @@ void MainWindow::updateRobotInfo(int robotId)
 {
     if (robotId < 0)
     {
-        ui->robotInfo->setHtml("<span style='color:#888'>未选择机器人。<br>点击右侧列表或在地图上用“查看/选择”点机器人。</span>");
+        ui->logInfo->setHtml("<span style='color:#888'>未选择机器人。<br>点击右侧列表或在地图上用“查看/选择”点机器人。</span>");
         return;
     }
     const Robot *r = m_controller->getRobot(robotId);
     if (!r)
     {
-        ui->robotInfo->setHtml("<span style='color:#c62828'>机器人不存在</span>");
+        ui->logInfo->setHtml("<span style='color:#c62828'>机器人不存在</span>");
         return;
     }
     QString html = QString(
-        "<b>机器人 R%1</b><br>"
-        "IP: %2<br>状态: %3<br>位置: (%4, %5)<br>电量: %6%%<br>速度: %7 / 上限 %8<br>"
-        "加速度: %9<br>最大负载: %10 kg<br>当前任务: %11")
-        .arg(robotId)
-        .arg(r->getIp())
-        .arg(statusToString(r->getStatus()))
-        .arg(r->getPx(), 0, 'f', 1)
-        .arg(r->getPy(), 0, 'f', 1)
-        .arg(r->getBattery())
-        .arg(r->getSpeed(), 0, 'f', 1)
-        .arg(m_controller->maxSpeed(), 0, 'f', 1)
-        .arg(r->getAccel(), 0, 'f', 1)
-        .arg(r->getMaxLoad())
-        .arg(r->getTask() < 0 ? "无" : QString::number(r->getTask()));
-    ui->robotInfo->setHtml(html);
+                       "<b>机器人 R%1</b><br>"
+                       "IP: %2<br>状态: %3<br>位置: (%4, %5)<br>电量: %6%%<br>速度: %7 / 上限 %8<br>"
+                       "加速度: %9<br>最大负载: %10 kg<br>当前任务: %11")
+                       .arg(robotId)
+                       .arg(r->getIp())
+                       .arg(statusToString(r->getStatus()))
+                       .arg(r->getPx(), 0, 'f', 1)
+                       .arg(r->getPy(), 0, 'f', 1)
+                       .arg(r->getBattery())
+                       .arg(r->getSpeed(), 0, 'f', 1)
+                       .arg(m_controller->maxSpeed(), 0, 'f', 1)
+                       .arg(r->getAccel(), 0, 'f', 1)
+                       .arg(r->getMaxLoad())
+                       .arg(r->getTask() < 0 ? "无" : QString::number(r->getTask()));
+    ui->logInfo->setHtml(html);
+}
+
+// ========== 任务信息区 ==========
+void MainWindow::updateTaskInfo(int taskId)
+{
+    if (taskId < 0)
+    {
+        ui->logInfo->setHtml("<span style='color:#888'>未选择任务。<br>点击右侧任务列表查看详情。</span>");
+        return;
+    }
+    const Task *t = m_controller->getTask(taskId);
+    if (!t)
+    {
+        ui->logInfo->setHtml("<span style='color:#c62828'>任务不存在</span>");
+        return;
+    }
+
+    const QString prio = t->getPriority() == 2   ? "高"
+                         : t->getPriority() == 1 ? "中"
+                                                 : "低";
+    const QString robot = t->getAssignedRobotId() < 0
+                              ? "未分配"
+                              : QString("R%1").arg(t->getAssignedRobotId());
+
+    QString html = QString(
+                       "<b>任务 T%1</b><br>"
+                       "优先级: %2<br>状态: %3<br>"
+                       "起点: (%4, %5)<br>终点: (%6, %7)<br>"
+                       "分配机器人: %8<br>"
+                       "创建时间: %9")
+                       .arg(taskId)
+                       .arg(prio)
+                       .arg(taskStatusToString(t->getStatus()))
+                       .arg(t->getStartX(), 0, 'f', 1)
+                       .arg(t->getStartY(), 0, 'f', 1)
+                       .arg(t->getEndX(), 0, 'f', 1)
+                       .arg(t->getEndY(), 0, 'f', 1)
+                       .arg(robot)
+                       .arg(t->getCreateTime().isValid()
+                                ? t->getCreateTime().toString("yyyy-MM-dd hh:mm:ss")
+                                : "无");
+
+    // 有开始/完成时间就补上
+    if (t->getStartTime().isValid())
+        html += QString("<br>开始时间: %1")
+                    .arg(t->getStartTime().toString("yyyy-MM-dd hh:mm:ss"));
+    if (t->getFinishTime().isValid())
+        html += QString("<br>完成时间: %1")
+                    .arg(t->getFinishTime().toString("yyyy-MM-dd hh:mm:ss"));
+    if (!t->getDescription().isEmpty())
+        html += QString("<br>描述: %1").arg(t->getDescription().toHtmlEscaped());
+
+    ui->logInfo->setHtml(html);
 }

@@ -60,6 +60,7 @@ private:
     void updateStatusBar();
     void updateSchedulerState();
     void updateRobotInfo(int robotId);
+    void updateTaskInfo(int taskId);
     int getSelectedRobotId() const;
     int getSelectedTaskId() const;
     int getNextRobotId();

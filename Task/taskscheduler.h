@@ -65,7 +65,8 @@ private:
     int m_intervalMs;
     bool m_isRunning;
     bool m_isReturnHome;
-    int m_lastWaitingTask = -1; // 上次提示"无空闲机器人等待"的任务，避免每拍刷屏
+    int m_lastWaitingTask = -1;
+    int m_taskTimeoutMs = 180000; // 任务执行超时(ms)，超时回收并置失败 // 上次提示"无空闲机器人等待"的任务，避免每拍刷屏
 };
 
 #endif // TASKSCHEDULER_H

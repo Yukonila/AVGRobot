@@ -4,6 +4,24 @@
 #include <QHostAddress>
 #include <QDateTime>
 
+// 组一个二进制帧: [AA55][len][func][data][xor][DDEE]
+static QByteArray makeFrame(quint8 func, const QByteArray &d)
+{
+    QByteArray b;
+    b.append((char)0xAA).append((char)0x55);
+    quint16 n = (quint16)d.size();
+    b.append((char)(n >> 8)).append((char)(n & 0xff));
+    b.append((char)func);
+    quint8 x = 0;
+    x ^= (quint8)(n >> 8); x ^= (quint8)(n & 0xff); x ^= func;
+    for (int i = 0; i < d.size(); ++i) x ^= (quint8)d[i];
+    b.append(d);
+    b.append((char)x);
+    b.append((char)0xDD).append((char)0xEE);
+    return b;
+}
+
+
 TcpRobotServer::TcpRobotServer(QObject *parent)
     : QObject(parent)
     , m_server(new QTcpServer(this))
@@ -65,8 +83,7 @@ bool TcpRobotServer::sendToRobot(int robotId, const QJsonObject &obj)
     if (!s)
         return false;
     QJsonDocument doc(obj);
-    s->write(doc.toJson(QJsonDocument::Compact));
-    s->write("\n");
+    s->write(makeFrame(0x02, doc.toJson(QJsonDocument::Compact))); // 0x02 任务下发
     return s->flush() || s->bytesToWrite() >= 0;
 }
 
@@ -214,6 +231,15 @@ void TcpRobotServer::onHeartbeat()
             m_robotLineLost[id] = true;
             emit robotHeartbeatTimeout(id);
             emit logMessage("[TCP] 机器人 " + QString::number(id) + " 心跳超时，判离线", 2);
+        }
+    }
+    // 周期性向所有已接入机器人发送心跳帧(0x04)
+    for (QTcpSocket *sock : m_socketId.keys())
+    {
+        if (sock && sock->state() == QAbstractSocket::ConnectedState)
+        {
+            sock->write(makeFrame(0x04, QByteArray()));
+            sock->flush();
         }
     }
 }

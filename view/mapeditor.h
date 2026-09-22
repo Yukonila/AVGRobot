@@ -116,10 +116,7 @@ private:
     QComboBox *m_priorityCombo; // 任务优先级 1..4
     QPushButton *m_btnForceStop; // 强制停止选中机器人
     int m_selRobot;             // “查看/选择”选中的机器人
-    QCheckBox *m_chkAutoHome;   // 自动回原点(隐藏占位)
-    QPushButton *m_btnAllHome;  // 全部回原点(隐藏占位)
     QList<QPushButton *> m_editOnly; // 仅管理员可见的删除按钮
-    QList<QPushButton *> m_design;   // 地图设计类按钮(新建任务时隐藏)
     QLabel *m_status;
 
     int m_topH; // 顶部工具栏占用的高度(两行)

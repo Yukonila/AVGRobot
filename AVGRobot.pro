@@ -26,8 +26,7 @@ SOURCES += \
     app/loginwindow.cpp \
     app/main.cpp \
     app/mainwindow.cpp \
-    view/mapeditor.cpp \
-    view/mapwidget.cpp
+    view/mapeditor.cpp
 
 HEADERS += \
     Data/datamanager.h \
@@ -42,8 +41,7 @@ HEADERS += \
     Tcp/tcpRobotServer.h \
     app/loginwindow.h \
     app/mainwindow.h \
-    view/mapeditor.h \
-    view/mapwidget.h
+    view/mapeditor.h
 
 FORMS += \
     app/mainwindow.ui \

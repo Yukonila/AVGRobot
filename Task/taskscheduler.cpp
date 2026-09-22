@@ -1,3 +1,4 @@
+#include <QDateTime>
 #include "taskscheduler.h"
 #include <cmath>
 #include <algorithm>
@@ -205,6 +206,18 @@ void TaskScheduler::checkExecutingTasks()
             m_taskManager->failTask(taskId);
             emit logMessage("[TaskScheduler] 任务 " + QString::number(taskId) +
                                 " 失败: 机器人 " + QString::number(robotId) + " 不存在",
+                            2);
+            continue;
+        }
+
+        // 执行超时回收：超过阈值仍未完成 → 置失败并释放机器人
+        if (task->getStartTime().isValid() &&
+            task->getStartTime().secsTo(QDateTime::currentDateTime()) * 1000 > m_taskTimeoutMs)
+        {
+            m_taskManager->failTask(taskId);
+            m_robotManager->finishRobotTask(robotId);
+            emit logMessage("[TaskScheduler] 任务 " + QString::number(taskId) +
+                                " 执行超时，已回收并置失败",
                             2);
             continue;
         }

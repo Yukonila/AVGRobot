@@ -33,35 +33,9 @@ QString MapEditorWidget::defaultMapPath()
 }
 
 MapEditorWidget::MapEditorWidget(QWidget *parent)
-    : QWidget(parent)
-    , m_cols(50)
-    , m_rows(30)
-    , m_cell(16)   // 锁定 16px/格(全屏观感好)
-    , m_grid(m_cols * m_rows, 0)
-    , m_start(-1, -1)
-    , m_end(-1, -1)
-    , m_tool(0)
-    , m_dragging(false)
-    , m_controller(nullptr)
-    , m_pickStart(-1, -1)
-    , m_toolCombo(nullptr)
-    , m_btnClear(nullptr)
-    , m_btnSave(nullptr)
-    , m_btnLoad(nullptr)
-    , m_btnNewTask(nullptr)
-    , m_btnStart(nullptr)
-    , m_btnRmLast(nullptr)
-    , m_btnClearTasks(nullptr)
-    , m_colSpin(nullptr)
-    , m_rowSpin(nullptr)
-    , m_btnApplySize(nullptr)
-    , m_priorityCombo(nullptr)
-    , m_btnForceStop(nullptr)
-    , m_selRobot(-1)
-    , m_chkAutoHome(nullptr)
-    , m_btnAllHome(nullptr)
-    , m_status(nullptr)
-    , m_topH(60)
+    : QWidget(parent), m_cols(50), m_rows(30), m_cell(16) // 锁定 16px/格(全屏观感好)
+      ,
+      m_grid(m_cols * m_rows, 0), m_start(-1, -1), m_end(-1, -1), m_tool(0), m_dragging(false), m_controller(nullptr), m_pickStart(-1, -1), m_toolCombo(nullptr), m_btnClear(nullptr), m_btnSave(nullptr), m_btnLoad(nullptr), m_btnNewTask(nullptr), m_btnStart(nullptr), m_btnRmLast(nullptr), m_btnClearTasks(nullptr), m_colSpin(nullptr), m_rowSpin(nullptr), m_btnApplySize(nullptr), m_priorityCombo(nullptr), m_btnForceStop(nullptr), m_selRobot(-1), m_status(nullptr), m_topH(60)
 {
     setupToolbar();
     setMouseTracking(true);
@@ -81,25 +55,25 @@ void MapEditorWidget::setController(RobotController *controller)
     m_controller = controller;
     if (!m_controller)
         return;
-    connect(m_controller, &RobotController::robotAdded, this, [this](int) { update(); });
-    connect(m_controller, &RobotController::robotRemoved, this, [this](int) { update(); });
-    connect(m_controller, &RobotController::robotStatusChanged, this, [this](int, RobotStatus, RobotStatus) { update(); });
-    connect(m_controller, &RobotController::robotPositionChanged, this, [this](int, float, float) { update(); });
-    connect(m_controller, &RobotController::taskAdded, this, [this](int) { update(); });
-    connect(m_controller, &RobotController::taskRemoved, this, [this](int) { update(); });
-    connect(m_controller, &RobotController::taskAssigned, this, [this](int, int) { update(); });
-    connect(m_controller, &RobotController::taskFinished, this, [this](int) { update(); });
-    connect(m_controller, &RobotController::taskCancelled, this, [this](int) { update(); });
+    connect(m_controller, &RobotController::robotAdded, this, [this](int)
+            { update(); });
+    connect(m_controller, &RobotController::robotRemoved, this, [this](int)
+            { update(); });
+    connect(m_controller, &RobotController::robotStatusChanged, this, [this](int, RobotStatus, RobotStatus)
+            { update(); });
+    connect(m_controller, &RobotController::robotPositionChanged, this, [this](int, float, float)
+            { update(); });
+    connect(m_controller, &RobotController::taskAdded, this, [this](int)
+            { update(); });
+    connect(m_controller, &RobotController::taskRemoved, this, [this](int)
+            { update(); });
+    connect(m_controller, &RobotController::taskAssigned, this, [this](int, int)
+            { update(); });
+    connect(m_controller, &RobotController::taskFinished, this, [this](int)
+            { update(); });
+    connect(m_controller, &RobotController::taskCancelled, this, [this](int)
+            { update(); });
 
-    // 回原点控制与 controller 同步
-    if (m_chkAutoHome)
-    {
-        QSignalBlocker block(m_chkAutoHome);
-        m_chkAutoHome->setChecked(m_controller->isReturnHomeEnabled());
-    }
-    if (m_chkAutoHome)
-        connect(m_chkAutoHome, &QCheckBox::toggled, this, [this](bool on)
-                { m_controller->setEnableReturnHome(on); });
     update();
 }
 
@@ -154,8 +128,7 @@ void MapEditorWidget::setupToolbar()
                 else if (idx == 0)
                     setStatusText("画障碍: 左键画 / 右键擦除");
                 else if (idx == 1)
-                    setStatusText("擦除: 左键/右键擦除");
-            });
+                    setStatusText("擦除: 左键/右键擦除"); });
     x += 98;
 
     m_btnNewTask = new QPushButton("新建任务", this);
@@ -229,16 +202,6 @@ void MapEditorWidget::setupToolbar()
     x += 80;
     connect(m_btnApplySize, &QPushButton::clicked, this, &MapEditorWidget::applySize);
 
-    // 自动回原点功能已移除：空闲机器人固定回最近充电桩，这两控件隐藏留空(占位)
-    m_chkAutoHome = new QCheckBox("自动回原点", this);
-    m_chkAutoHome->setVisible(false);
-    m_chkAutoHome->setGeometry(x, 3, 96, 24);
-    x += 100;
-    m_btnAllHome = new QPushButton("全部回原点", this);
-    m_btnAllHome->setVisible(false);
-    m_btnAllHome->setFixedSize(90, 24);
-    m_btnAllHome->move(x, 3);
-    x += 98;
 
     m_status = new QLabel(this);
     m_status->setGeometry(x + 8, 3, 260, 24);
@@ -266,7 +229,8 @@ void MapEditorWidget::setupToolbar()
         b->setFixedSize(104, 24);
         b->move(x2, 31);
         x2 += 112;
-        connect(b, &QPushButton::clicked, this, [fn]() { fn(); });
+        connect(b, &QPushButton::clicked, this, [fn]()
+                { fn(); });
         m_editOnly.append(b);
         return b;
     };
@@ -282,7 +246,8 @@ void MapEditorWidget::setupToolbar()
         b->setFixedSize(110, 24);
         b->move(x2, 31);
         x2 += 118;
-        connect(b, &QPushButton::clicked, this, [fn]() { fn(); });
+        connect(b, &QPushButton::clicked, this, [fn]()
+                { fn(); });
         return b;
     };
     m_btnRmLast = makeTaskDel("删除上一个任务", [this]()
@@ -301,14 +266,15 @@ void MapEditorWidget::setupToolbar()
         m_rowSpin->setVisible(designOn);
         for (QPushButton *b : m_editOnly)
             if (b)
-                b->setVisible(designOn && m_editable); // 充电桩/全部机器人删除(仅设计时)
+                b->setVisible(designOn && m_editable); // 充电桩/全部机器人删除
         if (m_btnRmLast)
             m_btnRmLast->setVisible(!designOn && m_editable); // 新建任务时出现
         if (m_btnClearTasks)
             m_btnClearTasks->setVisible(!designOn && m_editable);
     };
     connect(m_toolCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this, setDesignMode](int idx) { setDesignMode(idx != 2); });
+            this, [this, setDesignMode](int idx)
+            { setDesignMode(idx != 2); });
     setDesignMode(m_tool != 2);
 }
 
@@ -479,8 +445,12 @@ void MapEditorWidget::applyTool(const QPoint &cell)
             int prio = m_priorityCombo ? m_priorityCombo->currentData().toInt() : 2;
             emit requestAddTask(s, e, prio);
             emit notifyLog(QString("任务已创建(起点(%1,%2)→终点(%3,%4), 优先级%5)")
-                               .arg(s.x(),0,'f',0).arg(s.y(),0,'f',0)
-                               .arg(e.x(),0,'f',0).arg(e.y(),0,'f',0).arg(prio), 0);
+                               .arg(s.x(), 0, 'f', 0)
+                               .arg(s.y(), 0, 'f', 0)
+                               .arg(e.x(), 0, 'f', 0)
+                               .arg(e.y(), 0, 'f', 0)
+                               .arg(prio),
+                           0);
             setStatusText("任务已提交");
             update();
         }
@@ -607,13 +577,20 @@ static QString robotStatusName(int status)
 {
     switch (static_cast<RobotStatus>(status))
     {
-    case RobotStatus::Idle: return "空闲";
-    case RobotStatus::Busy: return "执行中";
-    case RobotStatus::Error: return "故障";
-    case RobotStatus::Offline: return "离线";
-    case RobotStatus::Charging: return "充电";
-    case RobotStatus::Lowbattery: return "低电量";
-    default: return "未知";
+    case RobotStatus::Idle:
+        return "空闲";
+    case RobotStatus::Busy:
+        return "执行中";
+    case RobotStatus::Error:
+        return "故障";
+    case RobotStatus::Offline:
+        return "离线";
+    case RobotStatus::Charging:
+        return "充电";
+    case RobotStatus::Lowbattery:
+        return "低电量";
+    default:
+        return "未知";
     }
 }
 
