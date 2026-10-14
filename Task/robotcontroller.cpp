@@ -728,7 +728,8 @@ bool RobotController::loadRobotsOnly()
     QList<Task> tasks;
     int port = 8888, interval = 3000;
     bool retHome = true;
-    if (!dm.loadAllData(robots, tasks, port, interval, retHome))
+    int lowBattery = (int)m_lowChargeLevel;
+    if (!dm.loadAllData(robots, tasks, port, interval, retHome, lowBattery))
     {
         emit logMessage("[RobotController] 载入机器人失败(数据文件不存在)", 2);
         return false;
@@ -1113,7 +1114,7 @@ bool RobotController::saveData(const QString &filePath)
     }
 
     int interval = m_scheduler ? m_scheduler->getInterval() : 3000;
-    return dm.saveAllData(robots, tasks, 8888, interval, m_isReturnHome);
+    return dm.saveAllData(robots, tasks, 8888, interval, m_isReturnHome, (int)m_lowChargeLevel);
 }
 
 bool RobotController::loadData(const QString &filePath)
@@ -1127,11 +1128,13 @@ bool RobotController::loadData(const QString &filePath)
     int port = 8888;
     int interval = 3000;
     bool enableReturnHome = true;
-    if (!dm.loadAllData(robots, tasks, port, interval, enableReturnHome))
+    int lowBattery = (int)m_lowChargeLevel;
+    if (!dm.loadAllData(robots, tasks, port, interval, enableReturnHome, lowBattery))
     {
         emit logMessage("[RobotController] 载入数据失败", 2);
         return false;
     }
+    m_lowChargeLevel = lowBattery; // 恢复持久化的低电阈值
 
     // 用载入数据替换当前数据
     bool wasRunning = m_scheduler && m_scheduler->isRunning();

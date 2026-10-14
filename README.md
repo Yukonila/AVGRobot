@@ -575,6 +575,7 @@ qmake ../robotClient.pro && make -j4
 | 到达判定 `arriveAt` | `0.5 格` | `robotcontroller.cpp:1014/926/931` | 路径点/终点距离 <0.5 视为已到达 |
 | 让道位移 | `1.0 格` | `robotcontroller.cpp:971` | 对头僵局时把一方沿垂直方向挪 1.0 格（>0.9 阈值，真正解除卡位） |
 | 充电桩互斥半径 | `0.5 格` | `robotcontroller.cpp:261` | 目标点落在该半径内时，仅"正在前往该桩"的车可进入 |
+| 低电阈值（可配） | `30 %`（默认，已持久化） | `robotcontroller.cpp:10/640` | 经 `saveData/loadData` 与 `data.json.config.lowBatteryThreshold` 读写；`setLowChargeLevel` 可运行时改 |
 | 默认网格 | `50 列 × 30 行`，`16 px/格` | `mapeditor.cpp:36/38` | 全屏观感；`m_cell` 已锁定，滚轮不缩放 |
 
 ### 9.3 `RobotController` 公开 API 速查（供接新前端 / 写自动化测试）
@@ -632,7 +633,7 @@ qmake ../robotClient.pro && make -j4
 
 - 所有整型状态字段都是 `*.h` 里枚举的整数值（9.1 表）。
 - `startTime/endTime/failTime` 为空字符串表示未发生。
-- `config.lowBatteryThreshold` 目前在 `DataManager` 未实际序列化（`RobotController` 用的是内部常量 30），属已知小缺口。
+- `config.lowBatteryThreshold` 已由 `saveAllData/loadAllData` 实际序列化（`RobotController` 内部常量 30 为默认，载入时覆盖），不再是缺口。
 
 ---
 
@@ -721,8 +722,10 @@ TCP 通信（服务端、帧解析、心跳、任务下发）、监控告警（�
 | 多地图/多用户隔离 | 单地图、账号不隔离数据 | 按账号或项目维度组织存档目录 |
 | 安全性 | 密码明文存储 | 加盐哈希（QCryptographicHash / bcrypt） |
 | 并发模型 | 全部在主线程 | 大量机器人时把调度/规划移出 UI 线程 |
-| 小清理 | `Data/Data.json` 是 0 字节的历史遗留文件（实际存档为小写 `data.json`） | 删除以免混淆（Linux 下大小写敏感） |
-| 充电桩未持久化 | `map.json` 只存障碍与起终点，充电桩仅存在内存（重启回到默认桩） | 在 `saveToFile/loadFromFile` 中把 `chargers` 一并序列化 |
+| 小清理 | ~~`Data/Data.json` 是 0 字节的历史遗留文件~~ **已删除**（实际存档为小写 `data.json`，Linux 下大小写敏感）；编译告警也已用 `Q_UNUSED` 清理 | — |
+| 充电桩未持久化 | ~~`map.json` 只存障碍与起终点，充电桩仅存在内存（重启回到默认桩）~~ **已修复**：`mapeditor.cpp` 的 `saveToFile/loadFromFile` 现把 `chargers`（世界坐标）一并序列化，载入时重建（无桩则恢复默认原点桩） | — |
+| 低电阈值写死 | ~~`m_lowChargeLevel` 无 getter/setter、未持久化~~ **已修复**：`RobotController::lowChargeLevel()`/`setLowChargeLevel()`，并经 `DataManager` 存入 `data.json.config.lowBatteryThreshold` | — |
+| 优先级 3/4 等价 | ~~UI 只分高/中/低，3 与 4 无法区分~~ **已修复**：新建任务下拉改为「紧急(4)/高(3)/中(2)/低(1)」，列表与详情四档独立显示 | — |
 | 编译告警 | 若干未使用参数、`QWheelEvent::pos()` 弃用告警 | 用 `Q_UNUSED` 与 `position().toPoint()` 清理 |
 
 ---

@@ -142,13 +142,13 @@ void MapEditorWidget::setupToolbar()
     connect(m_btnStart, &QPushButton::clicked, this, [this]()
             { if (m_controller) m_controller->startScheduler(1000); });
 
-    // 任务优先级(1..4)：新建任务时生效，调度按优先级分配
+    // 任务优先级(1..4)：数值越大越优先；调度按优先级分配
     m_priorityCombo = new QComboBox(this);
-    m_priorityCombo->addItem("优先级1", 1);
-    m_priorityCombo->addItem("优先级2", 2);
-    m_priorityCombo->addItem("优先级3", 3);
-    m_priorityCombo->addItem("优先级4", 4);
-    m_priorityCombo->setCurrentIndex(1); // 默认 2
+    m_priorityCombo->addItem("紧急(4)", 4);
+    m_priorityCombo->addItem("高(3)", 3);
+    m_priorityCombo->addItem("中(2)", 2);
+    m_priorityCombo->addItem("低(1)", 1);
+    m_priorityCombo->setCurrentIndex(2); // 默认 中(2)
     m_priorityCombo->setFixedSize(88, 24);
     m_priorityCombo->move(x, 3);
     x += 96;
@@ -799,6 +799,19 @@ bool MapEditorWidget::saveToFile(const QString &path)
                 obstacles.append(c);
             }
     obj["obstacles"] = obstacles;
+    // 充电桩持久化：把控制器的充电桩(格中心世界坐标)一并写入地图
+    if (m_controller)
+    {
+        QJsonArray chs;
+        for (const QPointF &ch : m_controller->chargers())
+        {
+            QJsonArray c;
+            c.append(ch.x());
+            c.append(ch.y());
+            chs.append(c);
+        }
+        obj["chargers"] = chs;
+    }
     if (m_start.x() >= 0)
     {
         QJsonArray c;
@@ -875,6 +888,25 @@ bool MapEditorWidget::loadFromFile(const QString &path)
             m_end = QPoint(ex, ey);
     }
     setMinimumSize(m_cols * m_cell + 16, m_rows * m_cell + m_topH + 8);
+
+    // 充电桩：以地图文件为准，先清空再按文件重建(首桩若为默认原点也一并重置)
+    if (m_controller)
+    {
+        m_controller->clearChargers();
+        bool any = false;
+        for (const QJsonValue &v : obj["chargers"].toArray())
+        {
+            QJsonArray c = v.toArray();
+            if (c.size() >= 2)
+            {
+                m_controller->addCharger(c[0].toDouble(), c[1].toDouble());
+                any = true;
+            }
+        }
+        if (!any)
+            m_controller->addDefaultCharger(); // 地图未含充电桩则恢复默认原点桩
+    }
+
     m_loadedAny = true; // 已载入地图
     update();
     emit mapChanged();

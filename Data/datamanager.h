@@ -42,13 +42,15 @@ public:
                      const QList<Task> &tasks,
                      int tcpPort,
                      int schedulerInterval,
-                     bool enableReturnHome);
+                     bool enableReturnHome,
+                     int lowBatteryThreshold = 30);
 
     bool loadAllData(QList<Robot> &outRobots,
                      QList<Task> &outTasks,
                      int &outTcpPort,
                      int &outSchedulerInterval,
-                     bool &outEnableReturnHome);
+                     bool &outEnableReturnHome,
+                     int &outLowBatteryThreshold);
 
 signals:
     void logMessage(const QString &msg, int level);

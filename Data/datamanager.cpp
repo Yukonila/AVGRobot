@@ -96,18 +96,18 @@ bool DataManager::saveAllData(const QList<Robot> &robots,
                               const QList<Task> &tasks,
                               int tcpPort,
                               int schedulerInterval,
-                              bool enableReturnHome)
+                              bool enableReturnHome,
+                              int lowBatteryThreshold)
 {
     QJsonObject root;
     root["robots"] = robotsToJson(robots);
     root["tasks"] = tasksToJson(tasks);
 
-    
     QJsonObject config;
     config["tcpPort"] = tcpPort;
     config["schedulerInterval"] = schedulerInterval;
     config["enableReturnHome"] = enableReturnHome;
-    config["lowBatteryThreshold"] = 20;
+    config["lowBatteryThreshold"] = lowBatteryThreshold;
     root["config"] = config;
 
     // 写入文件
@@ -130,11 +130,13 @@ bool DataManager::loadAllData(QList<Robot> &outRobots,
                               QList<Task> &outTasks,
                               int &outTcpPort,
                               int &outSchedulerInterval,
-                              bool &outEnableReturnHome)
+                              bool &outEnableReturnHome,
+                              int &outLowBatteryThreshold)
 {
     outTcpPort = 8888;
     outSchedulerInterval = 3000;
     outEnableReturnHome = true;
+    outLowBatteryThreshold = 30;
 
     if (!loadFromFile())
     {
@@ -179,9 +181,11 @@ bool DataManager::loadAllData(QList<Robot> &outRobots,
         outTcpPort = config.value("tcpPort").toInt(8888);
         outSchedulerInterval = config.value("schedulerInterval").toInt(3000);
         outEnableReturnHome = config.value("enableReturnHome").toBool(true);
+        outLowBatteryThreshold = config.value("lowBatteryThreshold").toInt(30);
         emit logMessage("[DataManager] 配置加载成功: 端口=" + QString::number(outTcpPort) +
                             ", 调度间隔=" + QString::number(outSchedulerInterval) + "ms" +
-                            ", 自动回原点=" + (outEnableReturnHome ? "开" : "关"),
+                            ", 自动回原点=" + (outEnableReturnHome ? "开" : "关") +
+                            ", 低电阈值=" + QString::number(outLowBatteryThreshold) + "%",
                         0);
     }
 

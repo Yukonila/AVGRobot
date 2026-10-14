@@ -622,6 +622,7 @@ void MainWindow::onBtnDeleteTaskClicked()
 
 void MainWindow::onTableRobotDoubleClicked(int row, int column)
 {
+    Q_UNUSED(row);
     Q_UNUSED(column);
     onBtnEditRobotClicked();
 }
@@ -660,11 +661,16 @@ void MainWindow::onRobotStatusChanged(int robotId, RobotStatus oldStatus, RobotS
 
 void MainWindow::onRobotPositionChanged(int robotId, float x, float y)
 {
+    Q_UNUSED(robotId);
+    Q_UNUSED(x);
+    Q_UNUSED(y);
     refreshRobotTable();
 }
 
 void MainWindow::onRobotBatteryChanged(int robotId, int battery)
 {
+    Q_UNUSED(robotId);
+    Q_UNUSED(battery);
     refreshRobotTable();
 }
 
@@ -793,8 +799,9 @@ void MainWindow::refreshTaskTable()
         if (!task)
             continue;
 
-        const QString prio = task->getPriority() == 2   ? "高"
-                             : task->getPriority() == 1 ? "中"
+        const QString prio = task->getPriority() == 4   ? "紧急"
+                             : task->getPriority() == 3 ? "高"
+                             : task->getPriority() == 2 ? "中"
                                                         : "低";
         const QString robot = task->getAssignedRobotId() < 0
                                   ? "未分配"
@@ -1069,8 +1076,9 @@ void MainWindow::updateTaskInfo(int taskId)
         return;
     }
 
-    const QString prio = t->getPriority() == 2   ? "高"
-                         : t->getPriority() == 1 ? "中"
+    const QString prio = t->getPriority() == 4   ? "紧急"
+                         : t->getPriority() == 3 ? "高"
+                         : t->getPriority() == 2 ? "中"
                                                  : "低";
     const QString robot = t->getAssignedRobotId() < 0
                               ? "未分配"
