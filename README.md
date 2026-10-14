@@ -527,7 +527,178 @@ qmake ../robotClient.pro && make -j4
 
 ---
 
-## 9. 与产品文档的差距 / 后续计划
+## 9. 速查参考
+
+### 9.1 状态枚举速查
+
+**机器人状态 `RobotStatus`（`Robot/robot.h`）**
+
+| 数值 | 枚举 | 含义 | 画布配色 |
+| :-: | --- | --- | --- |
+| -1 | `None` | 未知/无效（TCP 上报非法值兜底） | — |
+| 0 | `Idle` | 空闲，可接任务 | 绿 |
+| 1 | `Busy` | 执行任务中 | 橙 |
+| 2 | `Error` | 故障 | 红 |
+| 3 | `Offline` | 离线（TCP 心跳超时判定） | 灰 |
+| 4 | `Lowbattery` | 低电量告警 | 粉红 |
+| 5 | `Charging` | 充电中（**不参与调度候选**） | 蓝 |
+
+**任务状态 `TaskStatus`（`Task/task.h`）**
+
+| 数值 | 枚举 | 含义 |
+| :-: | --- | --- |
+| 0 | `Pending` | 待分配（在 `m_pendingList` 中按优先级排序） |
+| 1 | `Executing` | 执行中（`m_executingMap` 记录 taskId→robotId） |
+| 2 | `Completed` | 已完成（终态，`isFinished()` 为真） |
+| 3 | `Failed` | 异常/失败（含超时回收，终态） |
+| 4 | `Cancelled` | 已取消（终态） |
+
+> 注意：优先级在 UI 显示为「高/中/低」三档，但底层存的是 `1~4` 的整数，映射为：
+> `==2 → 高`、`==1 → 中`、其余（`3/4`）→ 低。调度比较时直接用整数降序。
+
+### 9.2 调参常量一览
+
+所有魔法数集中在 `RobotController` 构造函数与 `TaskScheduler` 中，调整前先 grep 确认位置：
+
+| 常量 | 值 | 定义位置 | 说明 / 调整影响 |
+| --- | --- | --- | --- |
+| 调度节拍 `setInterval` 默认 | `3000 ms` | `taskscheduler.cpp:11/30` | 调度器每拍扫描一次；过小会刷日志，过大会延迟派单 |
+| 任务超时回收 `m_taskTimeoutMs` | `180000 ms` | `taskscheduler.h:69` | 执行中任务超过该时长未完成 → 置失败并释放机器人 |
+| 移动模拟节拍 `m_simIntervalMs` | `250 ms` | `robotcontroller.cpp:10` | 每拍推进机器人位置；越小动画越平滑、CPU 占用越高 |
+| TCP 心跳周期 / 超时 | `1000 / 3000 ms` | `tcpRobotServer.cpp:32/29` | 每 1s 检查，超过 3s 无报文 → 离线 |
+| 低电阈值 `m_lowChargeLevel` | `30 %` | `robotcontroller.cpp:10` | 空闲且 ≤30% 自动转入充电 |
+| 回充速率 `m_chargePerSec` | `8 %/s` | `robotcontroller.cpp:10` | 充电时电量增速 |
+| 掉电系数 `m_drainPerUnit` | `0.22 %/单位` | `robotcontroller.cpp:10` | 行驶距离单位耗电；速度越快单位耗电越多（见 `drainBattery`） |
+| 速度上限 `m_maxRobotSpeed` | `12 单位/s` | `robotcontroller.cpp:10/125` | 模拟与实际移动都取 `min(配置速度, 上限)` |
+| 重规划节流 `m_lastReplan` | `600 ms` | `robotcontroller.cpp:826/840` | 被挡时重算路径的最小间隔，防抖动与日志刷屏 |
+| 接近即停 `minDist` | `0.8 格` | `robotcontroller.cpp:904` | 与其它机器人距离 <0.8 本拍不动 |
+| 到达判定 `arriveAt` | `0.5 格` | `robotcontroller.cpp:1014/926/931` | 路径点/终点距离 <0.5 视为已到达 |
+| 让道位移 | `1.0 格` | `robotcontroller.cpp:971` | 对头僵局时把一方沿垂直方向挪 1.0 格（>0.9 阈值，真正解除卡位） |
+| 充电桩互斥半径 | `0.5 格` | `robotcontroller.cpp:261` | 目标点落在该半径内时，仅"正在前往该桩"的车可进入 |
+| 默认网格 | `50 列 × 30 行`，`16 px/格` | `mapeditor.cpp:36/38` | 全屏观感；`m_cell` 已锁定，滚轮不缩放 |
+
+### 9.3 `RobotController` 公开 API 速查（供接新前端 / 写自动化测试）
+
+**机器人侧**
+
+| 方法 | 作用 |
+| --- | --- |
+| `addRobot(id, ip)` / `removeRobot(id)` | 增删机器人（IP 经 `isValidIp` 校验） |
+| `updatePosition / updateBattery / updateSpeed / updateStatus(id, …)` | TCP 上报后的状态写入入口 |
+| `getRobot(id)`、`getAllRobotIds()` | 查询 |
+| `getIdleCount / getBusyCount / getFaultCount` | 统计（状态栏用） |
+| `isRobotBusy(id)` | 是否被派活 |
+
+**任务侧**
+
+| 方法 | 作用 |
+| --- | --- |
+| `addTask(taskId, priority, sx, sy, ex, ey, desc)` | 新建任务（UI 画布调用） |
+| `removeTask / removeNewestTask / clearAllTasks / clearFinishedTasks` | 删除/清空（注意语义差异见 8.3 #11） |
+| `cancelExecutingTask / recycleTask` | 取消执行 / 退回待分配 |
+| `getPendingTaskIds / getExecutingTaskIds / getPendingCount / getExecutingCount …` | 索引查询 |
+
+**调度与运行**
+
+| 方法 | 作用 |
+| --- | --- |
+| `startScheduler(3000) / stopScheduler / scheduleOnce / isSchedulerRunning` | 调度控制 |
+| `setEnableReturnHome(bool) / returnIdleRobotsToHome()` | 空闲回桩开关 / 手动全部回桩 |
+| `setSimulationMode(bool) / isSimulationMode()` | 模拟移动 vs 真实数据 |
+| `forceStopRobot(id)` | 强制停止：任务退回、机器人空闲 |
+| `resolveConflicts()` | 自动让道解卡（API 保留，UI 按钮已移除） |
+| `saveData() / loadData() / loadRobotsOnly()` | 持久化 |
+
+### 9.4 `data.json` 字段字典
+
+路径 `<运行目录>/Data/data.json`，结构（`Data/datamanager.cpp`）：
+
+```
+{
+  "robots": [
+    { "id":10001, "x":12.5, "y":15.5, "battery":88, "speed":5.0,
+      "accel":1.5, "maxLoad":500, "load":0.0,
+      "status":1 /*RobotStatus 整型*/, "taskId":7, "ip":"127.0.0.1" }
+  ],
+  "tasks": [
+    { "taskId":1, "priority":2, "startX":.., "startY":.., "endX":.., "endY":..,
+      "desc":"", "status":1 /*TaskStatus 整型*/,
+      "assignedRobotId":-1, "startTime":"", "endTime":"", "failTime":"" }
+  ],
+  "config": { "tcpPort":8888, "schedulerInterval":3000,
+              "enableReturnHome":true /*, "lowBatteryThreshold":30 */ }
+}
+```
+
+- 所有整型状态字段都是 `*.h` 里枚举的整数值（9.1 表）。
+- `startTime/endTime/failTime` 为空字符串表示未发生。
+- `config.lowBatteryThreshold` 目前在 `DataManager` 未实际序列化（`RobotController` 用的是内部常量 30），属已知小缺口。
+
+---
+
+## 10. 常见问题排查
+
+| 现象 | 可能原因 | 排查 / 处理 |
+| --- | --- | --- |
+| 普通用户登录后看不到「添加机器人」「编辑/删除机器人」「账号管理」等按钮 | 权限矩阵按角色隐藏（5.8 节） | 属正常行为；用管理员 `koni/123` 登录，或让管理员在账号管理里把该用户设为管理员 |
+| 画布右侧面板所有按钮都是灰的、点不动 | **地图门控**未解除（5.9 节） | 先用「画障碍」工具画一笔、或「载入地图」，使 `mapLoaded()` 为真 |
+| 任务建好了却一直"待分配" | ① 没点「开始调度/行动」；② 没有空闲机器人；③ 起点/终点被墙隔开（创建时已被拒绝，查日志 "不可达"） | 检查调度器状态标签；确认有 Idle 机器人；看系统日志是否有"无空闲机器人"或"不可达"提示 |
+| 机器人直线穿过障碍物 | 多在「未画地图就调度」场景 | 见 8.5 #24：开始调度前控制器网格必须同步；先用工具画障碍并确认地图门控已亮 |
+| TCP 模式下机器人位置不动 / 电量不降 | 模拟移动已关闭（`setSimulationMode(false)`），位置只来自机器人上报 | 属预期；启动 `tools/robotClient` 或真机上报后即可动。不要误以为"卡住" |
+| TCP 连不上上位机 | 端口不是 8888 / 上位机没选 TCP 模式 / 防火墙 | 确认登录时选「TCP 接入真实机器人」；默认端口 8888；用 `./robotClient 10001 127.0.0.1 8888` 验证 |
+| 机器人列表里显示「离线」 | 心跳超过 3000ms 未收到任何报文 | 检查客户端是否在跑、网络是否通；离线后只要再来有效报文会自动恢复在线 |
+| 充电桩互相占格（A 的桩 B 也停进去） | 车位互斥逻辑（`blockedByCharger`）只拦"非前往该桩"的车 | 正常：只有把该桩作为充电目标的车能进；若想避免误停，设计时让充电桩间距 >1 格 |
+| 删除任务后机器人仍"忙碌" | 历史 bug 已修（8.3 #10）；若仍出现说明走的是旧构建 | 重新在 `build/vscode` 影子构建（第 7 节），勿在源码根 `make` |
+| `ui->xxx` 报错"没有该成员" | 源码根残留旧 `ui_*.h` 遮蔽新头（8.1 #1） | 删除源码根 `ui_*.h/moc_*/Makefile`，只在 `build/vscode` 构建 |
+| 工程编译报 `'g' 不是一个类型名` | `robotcontroller.cpp` 残留游离字符（8.1 #5，已修） | 拉取最新代码后重新构建 |
+
+---
+
+## 11. 功能自检清单 / 验收建议
+
+以下闭环在**模拟模式**下均可逐项验证；建议按序勾选。
+
+**环境准备**
+- [ ] 影子构建通过（`build/vscode` 下 `make -j4` 退出码 0）
+- [ ] 以 `koni/123` 登录，选「模拟机器人(自动移动演示)」
+- [ ] 画障碍 → 右侧面板与调度按钮由灰转亮（地图门控生效）
+
+**任务与调度**
+- [ ] 新建任务：画布点起点→终点，优先级可选 1~4
+- [ ] 不可达任务（终点被墙完全隔开）被弹窗拒绝，不产生僵尸任务
+- [ ] 点「开始调度/行动」后，空闲机器人被分配，任务状态转「执行中」
+- [ ] 机器人沿彩色路径**绕开障碍**行驶（不穿墙）
+- [ ] 到达终点（距离 <0.5）后任务变「已完成」，机器人回「空闲」
+
+**异常与抢占**
+- [ ] 高优先级任务在无空闲车时**抢占**执行中低优先级任务，被抢占任务退回待分配
+- [ ] 执行中任务超过 180s 未完成 → 自动「异常」并释放机器人（超时回收）
+- [ ] 「回收任务」「取消执行」「强制停止机器人」分别生效，且不产生僵尸忙碌态
+- [ ] 两个机器人对头/追尾时**不永久卡死**（接近即停 + 重规划绕行 + 让道解卡）
+
+**电量与充电**
+- [ ] 行驶中电量随距离下降（速度越快掉得越多）
+- [ ] 空闲且电量 ≤30% 自动转「充电中」并驶向最近充电桩
+- [ ] 充电至 100% 或 ≥80% 且有等待任务 → 恢复「空闲」
+- [ ] 机器人不会误占他人充电桩车位
+
+**持久化与权限**
+- [ ] 菜单「保存数据」生成 `Data/data.json`；重启后「载入数据」恢复机器人/任务/配置
+- [ ] 普通用户登录后设计类按钮与账号管理不可见
+- [ ] 账号库损坏后 `koni/123` 仍能登录（唯一管理员兜底）
+
+**TCP 联调**
+- [ ] 选 TCP 模式登录，启动 `robotClient 10001` → 机器人自动建档并上线
+- [ ] 建任务并调度 → 日志出现"已向机器人 X 下发任务 Y"，客户端收到 `0x02` 帧
+- [ ] 断掉客户端 → 3s 后机器人状态变「离线」，恢复后自动上线
+
+**自动化/headless 测试建议**
+- 已有的 `resolveConflicts` 单元测试用 `QT_QPA_PLATFORM=offscreen` + `pkg-config --cflags --libs Qt5Core Qt5Network` 链接 `build/vscode` 对象编译，机器人需合法 IP（如 `192.168.1.1`）否则 `addRobot` 拒绝。
+- 推荐把"可达性预检""抢占""超时回收""充电桩互斥"抽成独立的 `QObjectTest` 用例，脱离 UI 直接驱动 `RobotController`。
+
+---
+
+## 12. 与产品文档的差距 / 后续计划
 
 对照 `02-AVG物流机器人任务调度系统.docx` 的功能框图，**已完成**与**待完善**如下：
 
@@ -556,7 +727,7 @@ TCP 通信（服务端、帧解析、心跳、任务下发）、监控告警（�
 
 ---
 
-## 10. 快速上手
+## 13. 快速上手
 
 1. **构建**（务必影子构建）
    ```bash
@@ -577,7 +748,7 @@ TCP 通信（服务端、帧解析、心跳、任务下发）、监控告警（�
 
 ---
 
-## 11. 编码约定（维护须知）
+## 14. 编码约定（维护须知）
 
 1. **绝不在源码根目录 `make`**——只在 `build/vscode` 影子构建（见 8.1）。
 2. **持有 `QMutex` 时不得调用任何加锁成员函数**；需要数据就在锁内直接读成员容器（见 8.2 #6）。

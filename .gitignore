@@ -85,3 +85,6 @@ CMakeLists.txt.user*
 .uic/
 /build*/
 /.qtcreator/
+
+# 子项目 robotClient 的构建产物
+tools/robotClient/build/
