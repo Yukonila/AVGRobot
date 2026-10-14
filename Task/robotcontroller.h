@@ -7,6 +7,7 @@
 #include <QList>
 #include <QPointF>
 #include <QVector>
+#include <cmath>
 #include "robotmanager.h"
 #include "taskmanager.h"
 #include "taskscheduler.h"
@@ -39,8 +40,8 @@ public:
     bool updateRobotIp(int id, const QString &ip);
     // 生成一个"充电桩为圆心、圆内随机"的出生点(避障、不出界)
     QPointF nextSpawnPos() const;
-    // 对头相撞卡住时，把占道/低优先级的一方横向让开一格，破除僵局
-    void resolveConflicts();
+    // 交通管制：网格单元锁(区域锁) + 路口优先级仲裁 + 死锁检测与破除
+    void resolveConflicts();            // 对外保留：每拍末调用，执行死锁检测与破除
 
     // ========== 任务管理 ==========
     bool addTask(int taskId, int priority, float startX, float startY,
@@ -174,6 +175,26 @@ private:
     QList<QPointF> planPathWorldEx(float ax, float ay, float bx, float by,
                                    const QList<QPoint> &extra) const;
     QHash<int, qint64> m_lastReplan; // robotId -> 上次重规划时间(ms)
+
+    // —— 交通管制：网格单元锁(区域锁) + 路口优先级仲裁 + 死锁检测破除 ——
+    QHash<int, int> m_cellOwner;       // cellIndex -> robotId(当前占用/预留的机器人)
+    QHash<int, int> m_waitFor;         // robotId -> 它正等待(想进入的格被其占用)的 robotId
+    QHash<int, qint64> m_waitSince;    // robotId -> 进入等待的时刻(ms)
+    int m_deadlockThresholdMs = 1500;  // 等待超过该时长且无进展 → 判死锁
+    int m_deadlockVictim = -1;         // 本拍被强制允许破锁(破除死锁环)的机器人 id
+
+    // 世界坐标 -> 所在格
+    QPoint worldCell(float wx, float wy) const
+    { return QPoint((int)std::floor(wx), (int)std::floor(wy)); }
+    int cellIndex(const QPoint &c) const { return cellIndex(c.x(), c.y()); }
+    void rebuildCellOwners();                       // 依据各机器人当前位置重建单元占用
+    QPoint desiredNextCell(int id);                 // 机器人本拍想要进入的下一格
+    bool cellFreeFor(int id, const QPoint &cell) const; // 按优先级判定可否占用该格
+    bool advanceTo(int id, float nx, float ny);     // 本拍可否移动到(nx,ny)(自身格内或目标格可占用)
+    void commitMove(int id, float nx, float ny);    // 更新位置并刷新单元锁
+    void resolveTraffic();                          // 每拍：重建占用 + 优先级仲裁 + 记录等待
+    void detectAndBreakDeadlocks();                 // 检测等待环并打破
+    int robotPriority(int robotId) const;           // 取机器人优先级(执行中任务优先，无任务最低)
     // 家的位置：放在画布中间某格子的中心(充电桩位于格内，不压网格线)
     QPointF homePoint() const
     {

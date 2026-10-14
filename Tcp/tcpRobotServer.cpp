@@ -1,8 +1,10 @@
 #include "tcpRobotServer.h"
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QHostAddress>
 #include <QDateTime>
+#include <QPointF>
 
 // 组一个二进制帧: [AA55][len][func][data][xor][DDEE]
 static QByteArray makeFrame(quint8 func, const QByteArray &d)
@@ -31,6 +33,9 @@ TcpRobotServer::TcpRobotServer(QObject *parent)
     connect(m_server, &QTcpServer::newConnection, this, &TcpRobotServer::onNewConnection);
     m_heartTimer->setInterval(1000);
     connect(m_heartTimer, &QTimer::timeout, this, &TcpRobotServer::onHeartbeat);
+    m_ackTimeoutMs = 3000;
+    m_maxRetries = 3;
+    m_seq = 0;
 }
 
 TcpRobotServer::~TcpRobotServer()
@@ -87,6 +92,59 @@ bool TcpRobotServer::sendToRobot(int robotId, const QJsonObject &obj)
     return s->flush() || s->bytesToWrite() >= 0;
 }
 
+bool TcpRobotServer::sendPath(int robotId, int taskId, const QList<QPointF> &path)
+{
+    QJsonObject o;
+    o["taskId"] = taskId;
+    QJsonArray arr;
+    for (const QPointF &p : path)
+    {
+        QJsonArray wp;
+        wp.append(p.x());
+        wp.append(p.y());
+        arr.append(wp);
+    }
+    o["path"] = arr;
+    o["count"] = arr.size();
+    return sendReliable(robotId, 0x03, o); // 0x03 路径下发(需 ACK)
+}
+
+bool TcpRobotServer::sendControl(int robotId, const QString &cmd, int taskId)
+{
+    QJsonObject o;
+    o["cmd"] = cmd; // pause / resume / estop
+    if (taskId >= 0)
+        o["taskId"] = taskId;
+    return sendReliable(robotId, 0x06, o); // 0x06 控制指令(需 ACK)
+}
+
+bool TcpRobotServer::sendReliable(int robotId, quint8 func, const QJsonObject &obj)
+{
+    QTcpSocket *s = m_robotSock.value(robotId, nullptr);
+    if (!s || s->state() != QAbstractSocket::ConnectedState)
+        return false;
+    int seq = ++m_seq;
+    QJsonObject o = obj;
+    o["seq"] = seq; // 让对端回 ACK 时原样带回
+    QByteArray data = QJsonDocument(o).toJson(QJsonDocument::Compact);
+    s->write(makeFrame(func, data));
+    s->flush();
+    PendingCmd pc;
+    pc.seq = seq;
+    pc.robotId = robotId;
+    pc.func = func;
+    pc.obj = o;
+    pc.sentAt = QDateTime::currentMSecsSinceEpoch();
+    pc.retries = 0;
+    m_pending[seq] = pc;
+    emit logMessage(QString("[TCP] 下发 0x%1 seq=%2 至机器人 %3，等待 ACK")
+                        .arg(func, 0, 16)
+                        .arg(seq)
+                        .arg(robotId),
+                    0);
+    return true;
+}
+
 void TcpRobotServer::onNewConnection()
 {
     while (QTcpSocket *sock = m_server->nextPendingConnection())
@@ -141,8 +199,9 @@ void TcpRobotServer::onReadyRead()
             for (int i = 2; i <= 4 + dlen; ++i)
                 x ^= quint8(buf[i]); // 长度(2)+功能码(1)+数据(dlen)
             QByteArray payload = buf.mid(5, dlen);
+            quint8 func = (quint8)buf[4];
             if (x == stored)
-                handleLine(sock, payload); // payload 为 JSON(状态上报)
+                dispatchBinary(sock, func, payload);
             else
                 emit logMessage("[TCP] 帧校验失败(异或不符)", 2);
             buf.remove(0, total);
@@ -158,6 +217,65 @@ void TcpRobotServer::onReadyRead()
                 handleLine(sock, line);
         }
     }
+}
+
+void TcpRobotServer::dispatchBinary(QTcpSocket *sock, quint8 func, const QByteArray &payload)
+{
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(payload, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject())
+    {
+        if (func == 0x01)
+        {
+            // 兼容：0x01 可能直接是裸 JSON 行(无 seq 包装)
+            Q_UNUSED(sock);
+            return; // 由 handleLine 处理 (下行不应到这)
+        }
+        emit logMessage("[TCP] 二进制帧 JSON 解析失败 func=0x" + QString::number(func, 16), 2);
+        return;
+    }
+    QJsonObject o = doc.object();
+    switch (func)
+    {
+    case 0x01: // 状态上报(JSON 载荷)
+        handleLine(sock, payload);
+        break;
+    case 0x05: // 告警上报
+        handleAlarm(sock, o);
+        break;
+    case 0xF0: // ACK
+    case 0xF1: // NACK
+        handleAck(sock, o, func);
+        break;
+    default:
+        emit logMessage("[TCP] 收到未处理功能码 0x" + QString::number(func, 16), 1);
+        break;
+    }
+}
+
+void TcpRobotServer::handleAlarm(QTcpSocket *sock, const QJsonObject &o)
+{
+    int id = o.value("id").toInt(socketRobotId(sock));
+    int code = o.value("code").toInt(0);
+    QString msg = o.value("msg").toString();
+    touch(sock);
+    emit robotAlarm(id, code, msg);
+    emit logMessage(QString("[TCP] 机器人 %1 告警[code=%2]: %3").arg(id).arg(code).arg(msg), 1);
+    // 回 ACK
+    QTcpSocket *s = m_robotSock.value(id, nullptr);
+    if (s)
+        s->write(makeFrame(0xF0, QJsonDocument(QJsonObject{{"seq", o.value("seq")}, {"ok", true}}).toJson(QJsonDocument::Compact)));
+}
+
+void TcpRobotServer::handleAck(QTcpSocket *sock, const QJsonObject &o, quint8 func)
+{
+    Q_UNUSED(sock);
+    int seq = o.value("seq").toInt(-1);
+    bool ok = (func == 0xF0) && o.value("ok").toBool(true);
+    if (seq >= 0)
+        m_pending.remove(seq); // 确认收到，移除待重传
+    emit ackReceived(seq, ok);
+    emit logMessage(QString("[TCP] %1 seq=%2").arg(ok ? "ACK" : "NACK").arg(seq), 0);
 }
 
 void TcpRobotServer::handleLine(QTcpSocket *sock, const QByteArray &line)
@@ -241,5 +359,40 @@ void TcpRobotServer::onHeartbeat()
             sock->write(makeFrame(0x04, QByteArray()));
             sock->flush();
         }
+    }
+
+    // 下行指令 ACK 超时重传
+    for (auto it = m_pending.begin(); it != m_pending.end();)
+    {
+        PendingCmd &pc = it.value();
+        QTcpSocket *s = m_robotSock.value(pc.robotId, nullptr);
+        if (!s || s->state() != QAbstractSocket::ConnectedState)
+        {
+            emit ackTimeout(pc.seq);
+            emit logMessage(QString("[TCP] 下发 seq=%1 机器人 %2 已断开，放弃重传")
+                                .arg(pc.seq).arg(pc.robotId), 2);
+            it = m_pending.erase(it);
+            continue;
+        }
+        if (now - pc.sentAt > m_ackTimeoutMs)
+        {
+            if (pc.retries >= m_maxRetries)
+            {
+                emit ackTimeout(pc.seq);
+                emit logMessage(QString("[TCP] 下发 seq=%1 至机器人 %2 重试 %3 次仍无 ACK，放弃")
+                                    .arg(pc.seq).arg(pc.robotId).arg(pc.retries), 2);
+                it = m_pending.erase(it);
+                continue;
+            }
+            // 重传同一帧
+            QByteArray data = QJsonDocument(pc.obj).toJson(QJsonDocument::Compact);
+            s->write(makeFrame(pc.func, data));
+            s->flush();
+            pc.sentAt = now;
+            ++pc.retries;
+            emit logMessage(QString("[TCP] 重传 seq=%1 (第%2次) 至机器人 %3")
+                                .arg(pc.seq).arg(pc.retries).arg(pc.robotId), 1);
+        }
+        ++it;
     }
 }

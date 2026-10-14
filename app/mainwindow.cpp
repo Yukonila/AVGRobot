@@ -299,7 +299,20 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                         m_controller->updateStatus(id, RobotStatus::Offline);
                     appendLog(QString("[TCP] 机器人 %1 心跳超时→离线").arg(id), 2);
                     updateStatusBar(); });
-        // TCP 模式下：调度分配任务后，用 0x02 帧下发给真实机器人
+        connect(m_tcpServer, &TcpRobotServer::robotAlarm,
+                this, [this](int id, int code, const QString &msg)
+                {
+                    appendLog(QString("[告警] 机器人 %1 code=%2: %3").arg(id).arg(code).arg(msg), 2);
+                    if (m_controller->getRobot(id))
+                        m_controller->updateStatus(id, RobotStatus::Error);
+                    updateStatusBar(); });
+        connect(m_tcpServer, &TcpRobotServer::ackReceived,
+                this, [this](int seq, bool ok)
+                { appendLog(QString("[TCP] ACK seq=%1 %2").arg(seq).arg(ok ? "确认" : "否认"), 0); });
+        connect(m_tcpServer, &TcpRobotServer::ackTimeout,
+                this, [this](int seq)
+                { appendLog(QString("[TCP] ACK 超时 seq=%1 (重传耗尽)").arg(seq), 2); });
+        // TCP 模式下：调度分配任务后，下发 0x02 任务帧 + 0x03 规划路径帧
         connect(m_controller, &RobotController::taskAssigned, this, [this](int taskId, int robotId)
                 {
             if (m_simulate || !m_tcpServer)
@@ -317,7 +330,19 @@ MainWindow::MainWindow(QWidget *parent, bool simulate, bool isAdmin)
                 o["priority"] = t->getPriority();
             }
             m_tcpServer->sendToRobot(robotId, o);
-            appendLog(QString("[TCP] 已向机器人 %1 下发任务 %2").arg(robotId).arg(taskId), 0); });
+            appendLog(QString("[TCP] 已向机器人 %1 下发任务 %2").arg(robotId).arg(taskId), 0);
+            // 计算并下发路径(0x03)
+            if (t)
+            {
+                QList<QPointF> path = m_controller->planPathWorld(
+                    t->getStartX(), t->getStartY(), t->getEndX(), t->getEndY());
+                if (!path.isEmpty())
+                {
+                    m_tcpServer->sendPath(robotId, taskId, path);
+                    appendLog(QString("[TCP] 已向机器人 %1 下发路径 %2 (共 %3 点)")
+                                  .arg(robotId).arg(taskId).arg(path.size()), 0);
+                }
+            } });
 
         if (!m_tcpServer->start(8888))
             appendLog("[TCP] 服务端启动失败(端口被占用?)", 2);

@@ -1,9 +1,14 @@
 {
     "users": [
         {
-            "password": "123",
+            "password": "907b41bdeba1d8c85804ce2e9bc9771fc8a4cb2237b90a426325726866de14c4:606ca3d50a0c51524bcf25f0285dec8c93bd412febc7b9101024dfd711a608a3",
             "role": "admin",
             "username": "koni"
+        },
+        {
+            "password": "c950d29ad2d9be77265196a7baedafaa3a9d2cb71983f5948eeb8d792410dbee:b5b9387f7af48ed2ad786a8eae290adb144dd9b092195aacbbdbd8e0e4cde474",
+            "role": "user",
+            "username": "bob"
         }
     ]
 }

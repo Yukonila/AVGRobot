@@ -367,10 +367,10 @@ drop  = distance * m_drainPerUnit(0.22) * (0.5 + 0.5 * ratio);   // 速度越快
 | `0x01` | 机器人 → RCS | 状态上报（JSON 载荷：x/y/battery/status） | ✅ |
 | `0x02` | RCS → 机器人 | 任务下发（taskId/startX/startY/endX/endY/priority） | ✅ |
 | `0x04` | RCS → 机器人 | 心跳（空载荷） | ✅ |
-| `0x03` | RCS → 机器人 | 路径下发 | ⬜ 待实现 |
-| `0x05` | 机器人 → RCS | 告警上报 | ⬜ 待实现 |
-| `0x06` | RCS → 机器人 | 控制指令（暂停/恢复/急停） | ⬜ 待实现 |
-| `0xF0/0xF1` | 双向 | ACK / NACK | ⬜ 待实现 |
+| `0x03` | RCS → 机器人 | 路径下发（taskId + 路点数组） | ✅ 经 `sendPath`，走 ACK 重传 |
+| `0x05` | 机器人 → RCS | 告警上报（code/msg） | ✅ `robotAlarm` 信号 → 主窗口标 `Error` 并回 ACK |
+| `0x06` | RCS → 机器人 | 控制指令（pause/resume/estop） | ✅ 经 `sendControl`，走 ACK 重传 |
+| `0xF0/0xF1` | 双向 | ACK / NACK | ✅ 下行指令带 seq，超时 `m_ackTimeoutMs` 内未回 ACK 则重传 `m_maxRetries` 次 |
 
 ### 6.2 JSON 行协议（兼容调试）
 
@@ -712,15 +712,15 @@ TCP 通信（服务端、帧解析、心跳、任务下发）、监控告警（�
 
 | 项 | 现状 | 建议 |
 | --- | --- | --- |
-| 路径算法 | BFS 最短路（4 邻域无权图下等价最优） | 替换为 A* 启发式搜索以支持大网格；接口 `planPathWorldEx` 已预留，仅需替换函数体 |
+| 路径算法 | ~~BFS 最短路（4 邻域无权图下等价最优）~~ **已修复**：`planPathWorldEx` 现实现 A* 启发式搜索（4 邻域、曼哈顿启发、二叉堆 open 集，含 `extra` 动态障碍），其余 `planPathWorld` 亦复用 A*；已通过无头测试验证最短路与绕障 |
 | 通信方式 | 仅 TCP | 文档要求 TCP/UDP/串口(`QSerialPort`)/CAN 全兼容，可用策略模式抽象 `ITransport` |
 | 通信并发 | 单线程事件循环 | 文档要求"每连接独立线程"，可引入 `QThread`/线程池或将解析下沉 |
-| 协议完整性 | 0x01/0x02/0x04 已实现 | 补 0x03 路径下发、0x05 告警上报、0x06 控制指令、0xF0/0xF1 ACK/NACK 与超时重传 |
-| 交通管制 | 就近停 + 重规划 + 让道 | 文档的"区域锁、路口仲裁、死锁检测"未实现 |
+| 协议完整性 | ~~0x01/0x02/0x04 已实现~~ **已补全**：0x03 路径下发、0x05 告警上报、0x06 控制指令、0xF0/0xF1 ACK/NACK 与超时重传（`sendPath/sendControl` 走带 seq 的可靠下发，主窗口自动随任务下发 `0x03` 规划路径） | — |
+| 交通管制 | ~~就近停 + 重规划 + 让道~~ **已修复**：网格单元锁（区域锁，`m_cellOwner` 每拍依位置重建）+ 路口优先级仲裁（执行中任务优先级高者强占）+ 死锁检测与破除（`resolveTraffic`/`detectAndBreakDeadlocks` 沿等待图找环，超时强制最低优先级机器人绕开占用格重规划）；`stepRobots` 每拍调用 |
 | 数据统计 | 无 | 任务完成率/效率分析图表（QCustomPlot） |
 | 上层对接 | 无 | WMS/MES 接口（REST/MQ） |
 | 多地图/多用户隔离 | 单地图、账号不隔离数据 | 按账号或项目维度组织存档目录 |
-| 安全性 | 密码明文存储 | 加盐哈希（QCryptographicHash / bcrypt） |
+| 安全性 | ~~密码明文存储~~ **已修复**：`UserManager` 改用「随机盐 + SHA-256」（`salt:hash` 格式），旧版明文账号首次载入自动迁移；`koni/123` 仍可登录 | — |
 | 并发模型 | 全部在主线程 | 大量机器人时把调度/规划移出 UI 线程 |
 | 小清理 | ~~`Data/Data.json` 是 0 字节的历史遗留文件~~ **已删除**（实际存档为小写 `data.json`，Linux 下大小写敏感）；编译告警也已用 `Q_UNUSED` 清理 | — |
 | 充电桩未持久化 | ~~`map.json` 只存障碍与起终点，充电桩仅存在内存（重启回到默认桩）~~ **已修复**：`mapeditor.cpp` 的 `saveToFile/loadFromFile` 现把 `chargers`（世界坐标）一并序列化，载入时重建（无桩则恢复默认原点桩） | — |

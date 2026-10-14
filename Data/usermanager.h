@@ -7,10 +7,11 @@
 #include <QJsonObject>
 
 // 账号角色：第一个注册账号自动成为管理员，之后注册为普通用户
+// 注意：password 字段现存储 "salt:hash"（每账号随机盐 + SHA-256），不再存明文
 struct UserAccount
 {
     QString username;
-    QString password;
+    QString password; // 格式 "<saltHex>:<sha256Hex(salt+password)>"
     bool isAdmin = false;
 };
 
@@ -42,6 +43,10 @@ signals:
 
 private:
     void ensureDefaultAdmin();
+    QString generateSalt() const;                       // 随机盐(hex)
+    QString hashPassword(const QString &plain, const QString &salt) const; // salt:sha256
+    bool verifyPassword(const QString &plain, const QString &stored) const; // 校验
+    bool isHashed(const QString &stored) const;         // 是否已经是 salt:hash 格式
     QHash<QString, UserAccount> m_users; // 用户名 -> 账号
 };
 

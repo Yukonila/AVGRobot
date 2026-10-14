@@ -570,30 +570,58 @@ QList<QPointF> RobotController::planPathWorldEx(float ax, float ay, float bx, fl
         return out;
     if (m_obstacles.value(cellIndex(sx, sy), 1) == 1 || m_obstacles.value(cellIndex(gx, gy), 1) == 1)
         return out;
-    Q_UNUSED(extra);
     if (sx == gx && sy == gy)
     {
         out.append(QPointF(sx + 0.5f, sy + 0.5f));
         return out;
     }
 
-    // BFS + 前驱回溯（4 邻域）
-    QVector<int> pxv(m_gridCols * m_gridRows, -1), pyv(m_gridCols * m_gridRows, -1);
-    QVector<char> vis(m_gridCols * m_gridRows, 0);
+    // A* 最短路（4 邻域，曼哈顿启发式）。在无权网格上与 BFS 等价，
+    // 但为将来支持带权地形/对角线预留了 g 值扩展点。
+    const int N = m_gridCols * m_gridRows;
+    const int startIdx = cellIndex(sx, sy);
+    const int goalIdx = cellIndex(gx, gy);
+    QVector<float> gScore(N, std::numeric_limits<float>::infinity());
+    QVector<float> fScore(N, std::numeric_limits<float>::infinity());
+    QVector<int> pxv(N, -1), pyv(N, -1);
+    QVector<char> closed(N, 0);
     const int dx[4] = {1, -1, 0, 0};
     const int dy[4] = {0, 0, 1, -1};
-    QList<QPoint> que;
-    int head = 0;
-    vis[cellIndex(sx, sy)] = 1;
-    que.append(QPoint(sx, sy));
-    bool found = false;
-    while (head < que.size() && !found)
+
+    auto h = [&](int x, int y) // 曼哈顿距离启发式
+    { return std::abs(x - gx) + std::abs(y - gy); };
+
+    // 简易二叉堆(按 fScore 取最小)，规模不大用 QList + 线性取最小亦可，这里用优先队列
+    struct Node
     {
-        QPoint cur = que[head++];
-        for (int k = 0; k < 4 && !found; ++k)
+        int idx, x, y;
+        float f;
+    };
+    auto cmp = [](const Node &a, const Node &b) { return a.f > b.f; };
+    std::vector<Node> open;
+    gScore[startIdx] = 0.0f;
+    fScore[startIdx] = h(sx, sy);
+    open.push_back({startIdx, sx, sy, fScore[startIdx]});
+    std::push_heap(open.begin(), open.end(), cmp);
+
+    bool found = false;
+    while (!open.empty())
+    {
+        std::pop_heap(open.begin(), open.end(), cmp);
+        Node cur = open.back();
+        open.pop_back();
+        if (closed[cur.idx])
+            continue;
+        closed[cur.idx] = 1;
+        if (cur.idx == goalIdx)
         {
-            int nx = cur.x() + dx[k];
-            int ny = cur.y() + dy[k];
+            found = true;
+            break;
+        }
+        for (int k = 0; k < 4; ++k)
+        {
+            int nx = cur.x + dx[k];
+            int ny = cur.y + dy[k];
             if (!inBounds(nx, ny))
                 continue;
             if (m_obstacles.value(cellIndex(nx, ny), 1) == 1)
@@ -601,17 +629,18 @@ QList<QPointF> RobotController::planPathWorldEx(float ax, float ay, float bx, fl
             if (extra.contains(QPoint(nx, ny)))
                 continue; // 其它机器人所在格视为障碍
             int nidx = cellIndex(nx, ny);
-            if (vis[nidx])
+            if (closed[nidx])
                 continue;
-            vis[nidx] = 1;
-            pxv[nidx] = cur.x();
-            pyv[nidx] = cur.y();
-            if (nx == gx && ny == gy)
+            float tentative = gScore[cur.idx] + 1.0f; // 单位步长代价(可扩展为地形权重)
+            if (tentative < gScore[nidx])
             {
-                found = true;
-                break;
+                gScore[nidx] = tentative;
+                fScore[nidx] = tentative + h(nx, ny);
+                pxv[nidx] = cur.x;
+                pyv[nidx] = cur.y;
+                open.push_back({nidx, nx, ny, fScore[nidx]});
+                std::push_heap(open.begin(), open.end(), cmp);
             }
-            que.append(QPoint(nx, ny));
         }
     }
     if (!found)
@@ -850,7 +879,39 @@ void RobotController::stepBusyRobot(int id, Robot *r, float dt)
             }
             return; // 本次等待
         }
-        m_robotManager->updateRobotPosition(id, nx, ny);
+        // 交通管制：目标格被其它机器人占用且本机无更高优先级 → 等待(死锁由 resolveConflicts 破除)
+        if (!advanceTo(id, nx, ny))
+        {
+            qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (now - m_lastReplan.value(id, 0) > 600)
+            {
+                QList<QPoint> extra;
+                for (int oid : m_robotManager->getAllRobotIds())
+                {
+                    if (oid == id)
+                        continue;
+                    const Robot *o = m_robotManager->getRobot(oid);
+                    if (!o)
+                        continue;
+                    // 把全体其它机器人所在格作为临时障碍，A* 会绕开被占格
+                    extra.append(worldCell(o->getPx(), o->getPy()));
+                }
+                QList<QPointF> np = planPathWorldEx(r->getPx(), r->getPy(),
+                                                    task->getEndX(), task->getEndY(), extra);
+                m_lastReplan[id] = now;
+                if (!np.isEmpty())
+                {
+                    m_robotPlan[id] = np;
+                    m_robotPlanIdx[id] = 0;
+                    emit logMessage("[交通] 机器人 " + QString::number(id) +
+                                        (id == m_deadlockVictim ? " (死锁破局) 强制绕开占用格"
+                                                                : " 目标格被占用，尝试绕行重规划"),
+                                    1);
+                }
+            }
+            return; // 等待交通管制放行
+        }
+        commitMove(id, nx, ny);
         drainBattery(id, move, speed);
         return;
     }
@@ -895,7 +956,9 @@ bool RobotController::stepToward(int id, float tx, float ty, float speed, float 
     float ny = r->getPy() + dy / dist * move;
     if (robotProximityBlocked(id, nx, ny) || blockedByCharger(id, nx, ny))
         return true; // 被其它机器人占道/充电桩格拦住 → 等待
-    m_robotManager->updateRobotPosition(id, nx, ny);
+    if (!advanceTo(id, nx, ny))
+        return true; // 交通管制：目标格被高优先级机器人占用 → 等待
+    commitMove(id, nx, ny);
     return true;
 }
 
@@ -937,70 +1000,196 @@ bool RobotController::blockedByCharger(int robotId, float wx, float wy) const
     return false;
 }
 
-// 破除对头僵局：把低优先级/靠后的机器人横向挪开约半格(避开障碍)
-void RobotController::resolveConflicts()
+// ========== 交通管制：单元锁(区域锁) + 路口优先级仲裁 + 死锁检测破除 ==========
+
+// 依据各机器人当前位置，重建“单元 -> 占用者”映射(区域锁核心)
+void RobotController::rebuildCellOwners()
 {
-    const float tooClose = 0.9f;
-    QList<int> ids = m_robotManager->getAllRobotIds();
-    QList<int> nudged;
-    for (int i = 0; i < ids.size(); ++i)
+    m_cellOwner.clear();
+    for (int id : m_robotManager->getAllRobotIds())
     {
-        for (int j = i + 1; j < ids.size(); ++j)
+        const Robot *r = m_robotManager->getRobot(id);
+        if (!r)
+            continue;
+        QPoint c = worldCell(r->getPx(), r->getPy());
+        m_cellOwner[cellIndex(c.x(), c.y())] = id;
+    }
+}
+
+// 机器人本拍想要进入的下一格(用于死锁等待图)
+QPoint RobotController::desiredNextCell(int id)
+{
+    const Robot *r = m_robotManager->getRobot(id);
+    if (!r)
+        return QPoint(-1, -1);
+    QPoint cur = worldCell(r->getPx(), r->getPy());
+    if (r->getStatus() == RobotStatus::Busy && m_robotPlan.contains(id))
+    {
+        const QList<QPointF> &plan = m_robotPlan[id];
+        int idx = m_robotPlanIdx.value(id, 0);
+        for (int i = idx; i < plan.size(); ++i)
         {
-            const Robot *a = m_robotManager->getRobot(ids[i]);
-            const Robot *b = m_robotManager->getRobot(ids[j]);
-            if (!a || !b)
-                continue;
-            float dx = b->getPx() - a->getPx();
-            float dy = b->getPy() - a->getPy();
-            float d = std::sqrt(dx * dx + dy * dy);
-            if (d < 1e-4f)
-                continue; // 完全重合：跳过，避免除以零
-            if (d > tooClose)
-                continue;
-            // 让道：执行中者优先不动；否则让 id 较小者不动，另一个挪开
-            int mover = ids[j];
-            bool aBusy = (a->getStatus() == RobotStatus::Busy);
-            bool bBusy = (b->getStatus() == RobotStatus::Busy);
-            if (aBusy != bBusy)
-                mover = bBusy ? ids[i] : ids[j];
-            if (nudged.contains(mover))
-                continue;
-            const Robot *m = m_robotManager->getRobot(mover);
-            if (!m)
-                continue;
-            // 沿垂直方向挪 0.5 格
-            float nx = m->getPx();
-            float ny = m->getPy();
-            for (int k = 0; k < 4; ++k)
+            QPoint c = worldCell((float)plan[i].x(), (float)plan[i].y());
+            if (c != cur)
+                return c;
+        }
+        return cur;
+    }
+    // 空闲/充电：朝目标充电桩方向
+    QPointF ch = m_chargeTarget.contains(id) ? m_chargeTarget[id]
+                                            : nearestCharger(r->getPx(), r->getPy());
+    QPoint c = worldCell((float)ch.x(), (float)ch.y());
+    return (c == cur) ? cur : c;
+}
+
+// 按优先级判定机器人可否占用某格：空/自身可占；有占用者时仅高优先级可仲裁强占
+bool RobotController::cellFreeFor(int id, const QPoint &cell) const
+{
+    int owner = m_cellOwner.value(cellIndex(cell.x(), cell.y()), -1);
+    if (owner == -1 || owner == id)
+        return true;
+    if (robotPriority(id) > robotPriority(owner))
+        return true; // 高优先级仲裁胜出
+    return false;
+}
+
+// 给定目标位置(nx,ny)，判定机器人本拍可否移动(仍在自身格内或目标格可占用)
+bool RobotController::advanceTo(int id, float nx, float ny)
+{
+    const Robot *r = m_robotManager->getRobot(id);
+    if (!r)
+        return true;
+    QPoint cur = worldCell(r->getPx(), r->getPy());
+    QPoint nxt = worldCell(nx, ny);
+    if (nxt == cur)
+        return true; // 仍在自身格内移动
+    return cellFreeFor(id, nxt);
+}
+
+// 提交移动：更新位置并刷新单元锁(机器人离开旧格、占住新格)
+void RobotController::commitMove(int id, float nx, float ny)
+{
+    m_robotManager->updateRobotPosition(id, nx, ny);
+    QPoint c = worldCell(nx, ny);
+    int ci = cellIndex(c.x(), c.y());
+    QHash<int, int>::iterator it = m_cellOwner.begin();
+    while (it != m_cellOwner.end())
+    {
+        if (it.value() == id)
+            it = m_cellOwner.erase(it);
+        else
+            ++it;
+    }
+    m_cellOwner[ci] = id;
+}
+
+// 取机器人优先级：执行中任务优先级越高越优先；无任务(空闲/充电回桩)最低
+int RobotController::robotPriority(int robotId) const
+{
+    const Robot *r = m_robotManager->getRobot(robotId);
+    if (!r)
+        return -1;
+    if (r->getStatus() == RobotStatus::Busy && m_robotPlanTask.contains(robotId))
+    {
+        const Task *t = m_taskManager->getTask(m_robotPlanTask[robotId]);
+        if (t)
+            return t->getPriority();
+    }
+    return -1; // 空闲/充电回桩：最低优先级
+}
+
+// 每拍：重建单元占用 + 记录等待图(谁在等谁的格)
+void RobotController::resolveTraffic()
+{
+    rebuildCellOwners();
+    m_waitFor.clear();
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    for (int id : m_robotManager->getAllRobotIds())
+    {
+        const Robot *r = m_robotManager->getRobot(id);
+        if (!r)
+            continue;
+        QPoint cur = worldCell(r->getPx(), r->getPy());
+        QPoint nxt = desiredNextCell(id);
+        if (nxt != cur)
+        {
+            int owner = m_cellOwner.value(cellIndex(nxt.x(), nxt.y()), -1);
+            if (owner != -1 && owner != id)
             {
-                // 用 a→b 向量做垂直偏移
-                float perpX = -dy / d;
-                float perpY = dx / d;
-                if (k >= 2)
-                {
-                    perpX = -perpX;
-                    perpY = -perpY;
-                }
-                float tx = m->getPx() + perpX * (1.0f);
-                float ty = m->getPy() + perpY * (1.0f);
-                if (tx >= 0 && ty >= 0 && tx < m_gridCols && ty < m_gridRows &&
-                    !isBlockedWorld(tx, ty))
-                {
-                    nx = tx;
-                    ny = ty;
-                    break;
-                }
+                m_waitFor[id] = owner;
+                if (!m_waitSince.contains(id))
+                    m_waitSince[id] = now;
             }
-            if (std::abs(nx - m->getPx()) > 1e-3f || std::abs(ny - m->getPy()) > 1e-3f)
+            else
             {
-                m_robotManager->updateRobotPosition(mover, nx, ny);
-                nudged.append(mover);
+                m_waitFor.remove(id);
+                m_waitSince.remove(id);
             }
         }
+        else
+        {
+            m_waitFor.remove(id);
+            m_waitSince.remove(id);
+        }
     }
-    if (!nudged.isEmpty())
-        emit logMessage("[调度] 已解除 " + QString::number(nudged.size()) + " 处卡位", 1);
+}
+
+// 在等待图中检测环路(死锁)：等待超阈值且形成环，则强制最低优先级者强占破局
+void RobotController::detectAndBreakDeadlocks()
+{
+    m_deadlockVictim = -1;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const QList<int> ids = m_waitFor.keys();
+    for (int start : ids)
+    {
+        if (!m_waitSince.contains(start))
+            continue;
+        if (now - m_waitSince[start] < m_deadlockThresholdMs)
+            continue; // 还没等到死锁阈值
+        // 沿等待图走，检测是否成环
+        QList<int> path;
+        int cur = start;
+        bool cycle = false;
+        while (m_waitFor.contains(cur))
+        {
+            if (path.contains(cur))
+            {
+                cycle = true; // 回到已访问节点 → 成环
+                break;
+            }
+            path.append(cur);
+            cur = m_waitFor[cur];
+        }
+        if (!cycle)
+            continue;
+        // 成环：选环中优先级最低者作为破局者(强占其目标格)
+        int victim = -1;
+        int minP = 0x7fffffff;
+        for (int x : path)
+        {
+            int p = robotPriority(x);
+            if (p < minP)
+            {
+                minP = p;
+                victim = x;
+            }
+        }
+        m_deadlockVictim = victim;
+        QString ring;
+        for (int x : path)
+            ring += QString::number(x) + "→";
+        ring += QString::number(start);
+        emit logMessage("[交通] 检测到死锁环(" + ring + ")，强制低优先级机器人 " +
+                            QString::number(victim) + " 强占破局",
+                        2);
+        break;
+    }
+}
+
+// 交通管制对外入口：每拍执行死锁检测与破除(区域锁/优先级仲裁在 stepRobots 中生效)
+void RobotController::resolveConflicts()
+{
+    detectAndBreakDeadlocks();
 }
 
 void RobotController::stepRobots()
@@ -1013,6 +1202,11 @@ void RobotController::stepRobots()
     const float dt = m_simIntervalMs / 1000.0f;
     const float defaultSpeed = 8.0f; // 无速度配置时的模拟速度(单位/秒)
     const float arriveAt = 0.5f;     // 视为到达某段目标的判定距离
+
+    // 交通管制：先依据当前位置重建单元占用、记录等待图、检测并破除死锁环
+    // (m_deadlockVictim 供下方移动函数本拍强占放行)
+    resolveTraffic();
+    resolveConflicts();
 
     const QList<int> ids = m_robotManager->getAllRobotIds();
     for (int id : ids)
